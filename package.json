@@ -1,16 +1,27 @@
 {
-  "name": "lore-consistency",
+  "name": "lore-pack",
   "version": "0.0.0",
-  "private": true,
+  "description": "Organiza o mundo da sua história em fichas e monta o pacote de contexto para escrever com IA.",
   "type": "module",
-  "scripts": {
-    "test": "vitest run",
-    "typecheck": "tsc --noEmit",
-    "index": "echo nao implementado",
-    "eval": "echo nao implementado",
-    "check:demo": "echo nao implementado"
+  "bin": {
+    "lore-pack": "dist/index.js"
   },
+  "files": [
+    "dist",
+    "templates"
+  ],
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "license": "MIT",
   "devDependencies": {
+    "@types/node": "^24.19.0",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^5.0.3"

@@ -1,15 +1,9 @@
 node_modules/
-
-# Índice SQLite: regenerável a partir das fichas (npm run index), nunca versionado
-*.sqlite
-*.sqlite-journal
-*.db
-*.db-wal
-*.db-shm
-
-# Saídas do npm run eval
-eval-output/
-
-# Diversos
+dist/
+coverage/
 *.log
 .DS_Store
+Thumbs.db
+.env
+.vscode/
+.idea/
