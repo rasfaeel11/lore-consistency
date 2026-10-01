@@ -84,5 +84,5 @@ Estou reaprendendo TypeScript depois de um tempo parado e quero aprender enquant
 - **Não amplie o escopo.** Fora do marco atual vai para `docs/V2.md`.
 - **Seja direto e honesto.** Se uma decisão minha for ruim, diga. Se não souber algo, diga em vez de inventar.
 - **Não invente APIs nem flags.** Se depender de detalhe que pode ter mudado, confira na documentação.
-- Proponha entradas para `docs/DECISOES.md` quando houver decisão relevante; eu aprovo o texto.
+- Quando houver decisão relevante, registre direto em `docs/DECISOES.md` e me comunique. Não espere aprovação.
 - Sempre mande um commit depois de um prompt;
