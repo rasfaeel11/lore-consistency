@@ -94,3 +94,41 @@ Motivo: contar de verdade exigiria o tokenizador de cada IA (dependência nova e
 - **Página em HTML, CSS e JavaScript puro, em `web/`**, sem bundler e sem TypeScript no navegador. Compilar TS para o navegador pediria uma segunda configuração de build ou um bundler; para uma página pequena não compensa. Reavaliar no M4b se o xterm.js deixar o código do navegador maior. Todo texto da história entra com `textContent`, nunca como HTML.
 - **`createSession` saiu do `sessao nova`** para o app usar a mesma lógica. O `writePack` passou a receber o texto do plano (`plan`) em vez do caminho, porque no app o plano vem do formulário. A CLI lê o arquivo e passa o texto.
 - **O botão "Copiar pacote"** usa a área de transferência do navegador (princípio 9: sempre dá para só copiar). O `--copiar` da CLI continua no V2.
+
+## 2026-10-01: comando `app` renomeado para `ui`
+
+O "Comando desconhecido: ui" relatado no M4b não era registro nem build desatualizado: o comando do M4a se chamava `app`. Renomeado para `ui`, como no roteiro. A entrada do M4a acima fala em `app` porque registra o que foi decidido na época.
+
+O `npm test` passou a rodar `vitest run --dir tests`: havia um worktree em `.claude/worktrees/` e o Vitest rodava os testes dele junto.
+
+## 2026-10-01: guarda do cânone (M4b, parte 4)
+
+- **O que é protegido:** `biblia.md`, `estado.md`, `alfabeto.md` e tudo em `fichas/`, `referencias/` e `capitulos/`. Tudo em `sessoes/` fica livre, o que cobre as exceções `rascunho.md` e `fechamento.md`.
+- **Quando o snapshot é tirado:** ao criar a sessão (CLI e app). O roteiro pedia "ao abrir o terminal", mas o terminal (partes 2 e 3) ainda não existe. Quando existir, ele também vai tirar o snapshot. Sessões antigas podem começar a ser vigiadas com `sessao verificar <id> --vigiar` ou com o botão "Começar a vigiar".
+- **Formato:** `.lore-pack/snapshots/<id>/manifest.json` (data e sha256 de cada arquivo) mais a cópia byte a byte em `arquivos/`. A comparação usa o hash dos bytes, e o Reverter copia os bytes de volta, então nada muda, nem a quebra de linha. `.lore-pack/.gitignore` com `*` deixa a pasta fora do git sem mexer no `.gitignore` do autor.
+- **Quando compara:** no `sessao verificar`, no botão "Verificar alterações" e no `sessao fechar`, que recusa fechar com mudança não resolvida. Vai comparar também quando o terminal encerrar (parte 2).
+- **Reverter** volta tudo ao snapshot: restaura alterados e apagados, apaga criados. É tudo de uma vez, não arquivo por arquivo. No app, pede um segundo clique de confirmação. Na CLI, rodar com `--reverter` conta como a confirmação.
+- **Manter** acrescenta uma seção em `sessoes/<id>/alteracoes-diretas.md` e tira um snapshot novo, para a mesma mudança não ser acusada de novo.
+- **Diff sem dependência:** maior subsequência comum (LCS) linha a linha em `src/core/guard.ts`, com duas linhas de contexto. Antes de montar a tabela, corta o começo e o fim iguais, para um capítulo grande com poucas mudanças não pesar.
+- **Limite, dito com honestidade:** é detecção depois do fato, não bloqueio. Se a IA apagar ou reescrever um arquivo protegido, o autor descobre e pode reverter, mas a escrita já aconteceu. O bloqueio de verdade vem da validação do `apply` (M5). A IA também pode apagar o próprio `.lore-pack/`; nesse caso a sessão aparece como "sem snapshot".
+
+### Restringir a escrita no Claude Code (pesquisa da 4.5, ainda não aplicada)
+
+Pela documentação atual (code.claude.com/docs/en/permissions), dá para negar edição por caminho num `.claude/settings.json` da pasta da história. O caminho com `/` na frente é relativo à pasta do arquivo de configuração, e regra de `Write` é ignorada (o certo é `Edit`):
+
+```json
+{
+  "permissions": {
+    "deny": [
+      "Edit(/biblia.md)",
+      "Edit(/estado.md)",
+      "Edit(/alfabeto.md)",
+      "Edit(/fichas/**)",
+      "Edit(/referencias/**)",
+      "Edit(/capitulos/**)"
+    ]
+  }
+}
+```
+
+Limites, segundo a documentação: a regra vale para as ferramentas de arquivo, para comandos que o Claude Code reconhece no shell (`sed`, `tee`, redirecionamento `>`), mas não para um script que abre o arquivo sozinho (por exemplo, `node -e` ou `python`). Só a sandbox bloqueia isso no sistema operacional. A documentação não deixa claro se `deny` continua valendo no modo `bypassPermissions`. Vale só para o Claude Code; Gemini e ChatGPT não leem esse arquivo. Proposta: o `init` gera esse arquivo. Aguarda aprovação do autor.
