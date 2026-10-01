@@ -40,7 +40,7 @@ Motivo: personagens secundários e objetos numerados são comuns, e os capítulo
 
 ## 2026-10-01: o `check` lê só o que valida
 
-Decisão: o `check` lê os `.md` da raiz e os `.md` dentro de `fichas/`. Ignora `capitulos/`, `modelos/` e `prompts-de-sessao/`.
+Decisão: o `check` lê os `.md` da raiz e os `.md` dentro de `fichas/`. Ignora `capitulos/`, `modelos/` e `prompts-de-sessao/`. (Atualizado no M3: passa a ler também `capitulos/*.md` e `sessoes/<id>/sessao.md`.)
 
 Motivo: capítulos podem ser grandes e não são validados no M1. O modelo de ficha tem valores de exemplo e daria erro se fosse validado como ficha.
 
@@ -69,3 +69,15 @@ Motivo: contar de verdade exigiria o tokenizador de cada IA (dependência nova e
 - **Marca de arquivo gerado:** a primeira linha é um comentário `<!-- lore-pack: ... -->`. A checagem olha só o começo (`<!-- lore-pack:`), para pacotes antigos continuarem sobrescrevíveis se o texto da marca mudar.
 - **Quebras de linha:** a CLI lê todo arquivo trocando `\r\n` por `\n` e tirando o BOM, para o pacote sair igual no Windows e no Linux.
 - **O `pack` tem parse próprio de argumentos:** o `main` repassa tudo depois de `pack` para ele, porque só o pack conhece `--cena`, `--com` etc.
+
+## 2026-10-01: formato de capítulos e sessões (M3)
+
+- **Capítulos:** `capitulos/cap-NN.md`, com dois dígitos e mais quando passar de 99 (`cap-100`). Nome fora desse padrão é erro no `check`, porque a sessão aponta para o capítulo pelo nome do arquivo. O título é o primeiro cabeçalho `# `; sem ele, vale o nome do arquivo.
+- **Sessões:** uma pasta por sessão, `sessoes/<id>/`, com `sessao.md` (cabeçalho YAML + plano + resumo), `pacote.md` e, depois de fechada, `fechamento.md`. O `id` precisa ser igual ao nome da pasta, como nas fichas, e o `capitulo` precisa existir em `capitulos/`.
+- **Id da sessão:** `data-capítulo-sequência` (`2026-10-01-cap-03-02`). A sequência conta as sessões do capítulo em todos os dias, então `-02` quer dizer "2ª sessão do capítulo". A data é a local, não a UTC: às 22h no Brasil a UTC já está no dia seguinte. `criada_em` e `fechada_em` ficam em ISO UTC (`toISOString()`).
+- **Para não colidir**, o próximo id conta todas as pastas de `sessoes/`, mesmo as que têm `sessao.md` inválido.
+- **Última cena:** vem do capítulo da sessão. Se ele só tiver o título (capítulo recém-criado), vem do anterior. O `pack` usa a mesma regra a partir do capítulo mais recente, então o `capitulo novo` não deixa o pacote sem cena.
+- **`sessao fechar` reescreve o cabeçalho do `sessao.md`** (status e `fechada_em`) e mantém o corpo e campos extras. Rodar o comando conta como a confirmação do princípio 4. O resumo vem de `--resumo "texto"` e vira a seção `## Resumo`. O `fechamento.md` nunca é sobrescrito.
+- **O cabeçalho é gerado com o `stringify` do pacote `yaml`**, que já é dependência. O YAML 1.2 não transforma datas em objeto, então `criada_em` volta como texto.
+- **Se o pack falhar no `sessao nova`**, a pasta recém-criada da sessão é apagada, para não sobrar sessão sem pacote.
+- **`sessao nova` não executa nada:** só imprime o comando sugerido (`claude "Leia o arquivo ... e siga as instruções dele."`) e a alternativa de colar o pacote em outra IA.

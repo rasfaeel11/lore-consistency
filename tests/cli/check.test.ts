@@ -26,6 +26,7 @@ describe("check", () => {
     ["erro-id-duplicado", "fichas/lugares/brum.md", "id"],
     ["erro-sem-biblia", "biblia.md", null],
     ["erro-sem-estado", "estado.md", null],
+    ["erro-sessao-invalida", "sessoes/2026-10-01-cap-01-01/sessao.md", "status"],
   ])("%s sai com 1 e aponta o arquivo e o campo", (name, path, field) => {
     const result = main(["check", fixture(name)], "0.0.0");
 

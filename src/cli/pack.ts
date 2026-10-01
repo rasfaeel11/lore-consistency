@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import {
@@ -9,14 +9,15 @@ import {
   PACK_MARKERS,
   type PackSections,
 } from "../core/pack.js";
-import { lastScene, latestChapter } from "../core/scene.js";
+import { chapterForScene } from "../core/chapters.js";
+import { lastScene } from "../core/scene.js";
 import { selectFichas, type SelectedFicha } from "../core/select.js";
 import { estimateTokens } from "../core/tokens.js";
 import { isFichaPath, readFichas, validateStory, type StoryFile } from "../core/validate.js";
 import { formatReport } from "./check.js";
 import { TEMPLATES_DIR } from "./paths.js";
 import { fail, ok, type CliResult } from "./result.js";
-import { readStoryFiles, readText } from "./story-files.js";
+import { isDirectory, isFile, readStoryFiles, readText } from "./story-files.js";
 
 const USAGE = `Uso:
   lore-pack pack --cena <plano.md> [opções] [pasta]
@@ -45,6 +46,60 @@ const SECTION_LABELS: Record<keyof PackSections, string> = {
   ultima_cena: "última cena",
 };
 
+// Opções que o pack e o "sessao nova" têm em comum.
+export const PACK_OPTIONS = {
+  com: { type: "string", multiple: true },
+  sem: { type: "string", multiple: true },
+  alfabeto: { type: "boolean" },
+  "sem-ultima-cena": { type: "boolean" },
+  limite: { type: "string" },
+} as const;
+
+type PackOptionValues = {
+  com?: string[];
+  sem?: string[];
+  alfabeto?: boolean;
+  "sem-ultima-cena"?: boolean;
+  limite?: string;
+};
+
+export type PackOptions = {
+  include: string[];
+  exclude: string[];
+  alfabeto: boolean;
+  omitScene: boolean;
+  limit: number | undefined;
+};
+
+export type PackRequest = PackOptions & {
+  root: string;
+  planPath: string;
+  output: string;
+  // Capítulo de onde sai a última cena. Sem ele, o mais recente que tenha texto.
+  chapter?: string;
+};
+
+// Converte as opções comuns. Só o --limite pode estar errado.
+export function readPackOptions(values: PackOptionValues): { ok: true; options: PackOptions } | { ok: false; error: string } {
+  let limit: number | undefined;
+  if (values.limite !== undefined) {
+    if (!/^\d+$/.test(values.limite) || Number(values.limite) === 0) {
+      return { ok: false, error: `--limite precisa ser um número inteiro de tokens, por exemplo: --limite 8000` };
+    }
+    limit = Number(values.limite);
+  }
+  return {
+    ok: true,
+    options: {
+      include: splitIds(values.com),
+      exclude: splitIds(values.sem),
+      alfabeto: Boolean(values.alfabeto),
+      omitScene: Boolean(values["sem-ultima-cena"]),
+      limit,
+    },
+  };
+}
+
 export function pack(args: string[]): CliResult {
   let parsed;
   try {
@@ -52,11 +107,7 @@ export function pack(args: string[]): CliResult {
       args,
       options: {
         cena: { type: "string" },
-        com: { type: "string", multiple: true },
-        sem: { type: "string", multiple: true },
-        alfabeto: { type: "boolean" },
-        "sem-ultima-cena": { type: "boolean" },
-        limite: { type: "string" },
+        ...PACK_OPTIONS,
         saida: { type: "string" },
         help: { type: "boolean", short: "h" },
       },
@@ -73,13 +124,8 @@ export function pack(args: string[]): CliResult {
     return fail(`Informe o plano da cena com --cena.\n\n${USAGE}`);
   }
 
-  let limit: number | undefined;
-  if (options.limite !== undefined) {
-    if (!/^\d+$/.test(options.limite) || Number(options.limite) === 0) {
-      return fail(`--limite precisa ser um número inteiro de tokens, por exemplo: --limite 8000`);
-    }
-    limit = Number(options.limite);
-  }
+  const common = readPackOptions(options);
+  if (!common.ok) return fail(common.error);
 
   const folder = parsed.positionals[0] ?? ".";
   const root = resolve(folder);
@@ -94,6 +140,18 @@ export function pack(args: string[]): CliResult {
     return fail(`O plano da cena "${options.cena}" não existe. Confira o caminho do --cena.`);
   }
 
+  return writePack({
+    ...common.options,
+    root,
+    planPath,
+    output: options.saida ? resolve(options.saida) : join(root, "pacote.md"),
+  });
+}
+
+// Monta o pacote e grava em request.output. Quem chama já conferiu a pasta e o plano.
+export function writePack(request: PackRequest): CliResult {
+  const { root } = request;
+
   // Mesma validação do check: com erro nas fichas, não monta pacote.
   const files = readStoryFiles(root);
   const problems = validateStory(files);
@@ -105,23 +163,23 @@ export function pack(args: string[]): CliResult {
   }
   const warningCount = problems.length;
 
-  // Última cena: do capítulo mais recente de capitulos/, a não ser que o usuário peça para omitir.
-  const chapter = options["sem-ultima-cena"] ? undefined : findLatestChapter(root);
-  const scene = chapter ? lastScene(readText(join(root, chapter))) : "";
+  // Última cena: a não ser que o usuário peça para omitir.
+  const chapter = request.omitScene ? undefined : chapterForScene(files, request.chapter);
+  const scene = chapter ? lastScene(findFile(files, chapter)?.content ?? "") : "";
 
   const fichaFiles = readFichas(files);
   const selection = selectFichas({
     fichas: fichaFiles.map((f) => f.ficha),
-    plan: readText(planPath),
+    plan: readText(request.planPath),
     lastScene: scene,
-    include: splitIds(options.com),
-    exclude: splitIds(options.sem),
+    include: request.include,
+    exclude: request.exclude,
   });
   if (!selection.ok) return fail(selection.errors.join("\n"));
 
   let alfabeto = "";
-  if (options.alfabeto) {
-    const file = rootFile(files, "alfabeto.md");
+  if (request.alfabeto) {
+    const file = findFile(files, "alfabeto.md");
     if (!file) {
       return fail(`--alfabeto: não existe alfabeto.md na pasta da história. Crie o arquivo ou rode sem --alfabeto.`);
     }
@@ -130,8 +188,8 @@ export function pack(args: string[]): CliResult {
 
   const template = chooseTemplate(root);
   const sections: PackSections = {
-    biblia: rootFile(files, "biblia.md")?.content ?? "",
-    estado: rootFile(files, "estado.md")?.content ?? "",
+    biblia: findFile(files, "biblia.md")?.content ?? "",
+    estado: findFile(files, "estado.md")?.content ?? "",
     fichas: selection.selected
       .map((s) => fichaFiles.find((f) => f.ficha.id === s.id)?.content.trim() ?? "")
       .join("\n\n"),
@@ -141,7 +199,7 @@ export function pack(args: string[]): CliResult {
   const content = `${PACK_MARK}\n${buildPack(template.text, sections)}`;
 
   // Princípio 4: só sobrescreve arquivo que o próprio pack gerou.
-  const output = options.saida ? resolve(options.saida) : join(root, "pacote.md");
+  const output = request.output;
   if (existsSync(output)) {
     if (!isFile(output)) {
       return fail(`"${output}" é uma pasta. Escolha um arquivo com --saida.`);
@@ -171,11 +229,11 @@ export function pack(args: string[]): CliResult {
       output,
       selected: selection.selected,
       chapter,
-      sceneOmitted: Boolean(options["sem-ultima-cena"]),
+      sceneOmitted: request.omitScene,
       sections,
       template: template.text,
       total: estimateTokens(content),
-      limit,
+      limit: request.limit,
       warnings,
     }),
   );
@@ -189,14 +247,6 @@ function splitIds(values: string[] | undefined): string[] {
     .filter((id) => id !== "");
 }
 
-function findLatestChapter(root: string): string | undefined {
-  const dir = join(root, "capitulos");
-  if (!isDirectory(dir)) return undefined;
-  const names = readdirSync(dir).filter((name) => name.endsWith(".md") && isFile(join(dir, name)));
-  const latest = latestChapter(names);
-  return latest ? `capitulos/${latest}` : undefined;
-}
-
 // Usa o 00 do usuário se ele tiver os marcadores; senão, o modelo que vem com o lore-pack.
 function chooseTemplate(root: string): { text: string; usedDefault: boolean } {
   const userTemplate = join(root, TEMPLATE_PATH);
@@ -207,16 +257,8 @@ function chooseTemplate(root: string): { text: string; usedDefault: boolean } {
   return { text: readText(join(TEMPLATES_DIR, TEMPLATE_PATH)), usedDefault: true };
 }
 
-function rootFile(files: StoryFile[], name: string): StoryFile | undefined {
-  return files.find((file) => file.path === name);
-}
-
-function isFile(path: string): boolean {
-  return existsSync(path) && statSync(path).isFile();
-}
-
-function isDirectory(path: string): boolean {
-  return existsSync(path) && statSync(path).isDirectory();
+function findFile(files: StoryFile[], path: string): StoryFile | undefined {
+  return files.find((file) => file.path === path);
 }
 
 type SummaryInput = {
@@ -249,7 +291,7 @@ function formatSummary(input: SummaryInput): string {
 
   if (input.sceneOmitted) lines.push("Última cena: omitida (--sem-ultima-cena)");
   else if (input.chapter) lines.push(`Última cena: ${input.chapter}`);
-  else lines.push("Última cena: nenhum capítulo em capitulos/");
+  else lines.push("Última cena: nenhum capítulo com texto em capitulos/");
 
   // Tokens só das seções que entraram no pacote (não vazias e com marcador no modelo).
   const included = PACK_MARKERS.filter(

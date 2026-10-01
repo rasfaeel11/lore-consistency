@@ -16,9 +16,3 @@ export function lastScene(chapter: string): string {
   return texts.findLast((text) => text !== "") ?? "";
 }
 
-// Escolhe o capítulo mais recente pela ordem do nome do arquivo.
-// A comparação numérica faz "cap-10" vir depois de "cap-2", mesmo sem zero à esquerda.
-export function latestChapter(fileNames: string[]): string | undefined {
-  const sorted = [...fileNames].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-  return sorted.at(-1);
-}

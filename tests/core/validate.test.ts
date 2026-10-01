@@ -145,3 +145,55 @@ describe("validateStory", () => {
     expect(problems[0]?.message).toContain("fichas/lugares/");
   });
 });
+
+describe("validateStory: capítulos e sessões", () => {
+  const CAP = { path: "capitulos/cap-01.md", content: "# Um\n" };
+
+  function sessao(folder: string, ...headerLines: string[]): StoryFile {
+    return { path: `sessoes/${folder}/sessao.md`, content: `---\n${headerLines.join("\n")}\n---\n## Plano\n` };
+  }
+
+  const OK_HEADER = [
+    "id: 2026-10-01-cap-01-01",
+    "capitulo: cap-01",
+    "criada_em: 2026-10-01T12:00:00.000Z",
+    "status: aberta",
+  ];
+
+  it("capítulo e sessão válidos não têm problemas", () => {
+    expect(validateStory([...ROOT, CAP, sessao("2026-10-01-cap-01-01", ...OK_HEADER)])).toEqual([]);
+  });
+
+  it("capítulo com nome fora do padrão cap-NN é erro", () => {
+    const problems = validateStory([...ROOT, { path: "capitulos/primeiro.md", content: "# Um\n" }]);
+
+    expect(problems).toEqual([expect.objectContaining({ path: "capitulos/primeiro.md", severity: "erro" })]);
+    expect(problems[0]?.message).toContain("cap-01.md");
+  });
+
+  it("sessão sem cabeçalho é erro", () => {
+    const problems = validateStory([...ROOT, CAP, { path: "sessoes/x/sessao.md", content: "sem cabeçalho" }]);
+
+    expect(problems).toEqual([expect.objectContaining({ path: "sessoes/x/sessao.md", severity: "erro" })]);
+  });
+
+  it("status inválido é erro no campo status", () => {
+    const header = OK_HEADER.map((l) => (l.startsWith("status") ? "status: pausada" : l));
+    const problems = validateStory([...ROOT, CAP, sessao("2026-10-01-cap-01-01", ...header)]);
+
+    expect(problems).toEqual([expect.objectContaining({ field: "status", severity: "erro" })]);
+  });
+
+  it("id diferente do nome da pasta é erro", () => {
+    const problems = validateStory([...ROOT, CAP, sessao("outra-pasta", ...OK_HEADER)]);
+
+    expect(problems).toEqual([expect.objectContaining({ field: "id", severity: "erro" })]);
+  });
+
+  it("capítulo que não existe em capitulos/ é erro", () => {
+    const problems = validateStory([...ROOT, sessao("2026-10-01-cap-01-01", ...OK_HEADER)]);
+
+    expect(problems).toEqual([expect.objectContaining({ field: "capitulo", severity: "erro" })]);
+    expect(problems[0]?.message).toContain("capitulos/cap-01.md");
+  });
+});

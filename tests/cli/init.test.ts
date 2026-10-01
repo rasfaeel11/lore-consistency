@@ -26,6 +26,7 @@ describe("init", () => {
     expect(existsSync(join(target, "modelos", "ficha-modelo.md"))).toBe(true);
     expect(existsSync(join(target, "fichas", "personagens"))).toBe(true);
     expect(existsSync(join(target, "fichas", "personagens", ".gitkeep"))).toBe(false);
+    expect(readdirSync(join(target, "sessoes"))).toEqual([]);
     expect(result.stdout).toContain("check");
   });
 

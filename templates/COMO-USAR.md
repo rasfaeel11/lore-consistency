@@ -8,7 +8,8 @@ Uma pasta, arquivos curtos, uma conversa nova por capítulo. O que não está no
 - `alfabeto.md`: regras de nomes por povo + lista de nomes já usados. Só vai no pacote quando a sessão for criar nomes.
 - `estado.md`: resumo geral, resumo por capítulo, setups abertos, decisões. Sempre vai no pacote.
 - `fichas/`: uma ficha por personagem, lugar, facção ou objeto. Só as fichas da cena vão no pacote.
-- `capitulos/`: o texto final de cada capítulo (`cap-01.md`, `cap-02.md`...). Só a última cena vai no pacote.
+- `capitulos/`: o texto final de cada capítulo (`cap-01.md`, `cap-02.md`...). Só a última cena vai no pacote. Crie com `lore-pack capitulo novo "título"`.
+- `sessoes/`: uma pasta por sessão de escrita, com o plano (`sessao.md`), o pacote (`pacote.md`) e o fechamento. Crie com `lore-pack sessao nova`, veja com `lore-pack sessao listar` e feche com `lore-pack sessao fechar`.
 - `modelos/`: modelo de ficha.
 - `prompts-de-sessao/`: os prompts que você cola na IA, numerados na ordem de uso.
 

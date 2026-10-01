@@ -1,6 +1,8 @@
+import { CHAPTER_ID, chapterFileName, listChapters } from "./chapters.js";
 import { FOLDER_BY_TIPO, fichaSchema, type Ficha } from "./ficha.js";
 import { splitFrontmatter } from "./frontmatter.js";
 import { normalize } from "./normalize.js";
+import { sessionFolder, sessionSchema } from "./session.js";
 
 // Um arquivo da pasta da história, já lido. O caminho é relativo à pasta e usa "/".
 export type StoryFile = {
@@ -52,6 +54,12 @@ export function validateStory(files: StoryFile[]): Problem[] {
   problems.push(...findRepeatedNames(valid));
   problems.push(...findWrongFolders(valid));
 
+  problems.push(...validateChapterNames(files));
+  const chapterIds = listChapters(files).map((chapter) => chapter.id);
+  for (const file of files.filter((f) => sessionFolder(f.path))) {
+    problems.push(...validateSession(file, chapterIds));
+  }
+
   return problems;
 }
 
@@ -102,6 +110,61 @@ function validateFicha(file: StoryFile): { problems: Problem[]; ficha?: Ficha } 
 
   if (!parsed.success || problems.length > 0) return { problems };
   return { problems, ficha: parsed.data };
+}
+
+function validateChapterNames(files: StoryFile[]): Problem[] {
+  const problems: Problem[] = [];
+  for (const file of files) {
+    const name = chapterFileName(file.path);
+    if (name === undefined || CHAPTER_ID.test(name)) continue;
+    problems.push(
+      error(
+        file.path,
+        null,
+        `O nome do capítulo está fora do padrão. Renomeie para cap-NN.md, com o número do capítulo, por exemplo cap-01.md.`,
+      ),
+    );
+  }
+  return problems;
+}
+
+function validateSession(file: StoryFile, chapterIds: string[]): Problem[] {
+  const split = splitFrontmatter(file.content);
+  if (!split.ok) return [error(file.path, null, split.error)];
+
+  const problems: Problem[] = [];
+  const parsed = sessionSchema.safeParse(split.data);
+  if (!parsed.success) {
+    for (const issue of parsed.error.issues) {
+      const field = issue.path.length > 0 ? String(issue.path[0]) : null;
+      problems.push(error(file.path, field, issue.message));
+    }
+  }
+
+  // Igual às fichas: o id precisa bater com o nome da pasta.
+  const id = split.data.id;
+  const folder = sessionFolder(file.path);
+  if (typeof id === "string" && id !== folder) {
+    problems.push(
+      error(
+        file.path,
+        "id",
+        `O id "${id}" é diferente do nome da pasta (sessoes/${folder}/). Renomeie a pasta para ${id} ou mude o id para "${folder}".`,
+      ),
+    );
+  }
+
+  const capitulo = split.data.capitulo;
+  if (typeof capitulo === "string" && CHAPTER_ID.test(capitulo) && !chapterIds.includes(capitulo)) {
+    problems.push(
+      error(
+        file.path,
+        "capitulo",
+        `O capítulo "${capitulo}" não existe: não há capitulos/${capitulo}.md. Crie o capítulo com "lore-pack capitulo novo" ou corrija o campo.`,
+      ),
+    );
+  }
+  return problems;
 }
 
 function findDuplicateIds(valid: { path: string; ficha: Ficha }[]): Problem[] {

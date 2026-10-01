@@ -6,22 +6,23 @@ Ferramenta para quem escreve histórias com ajuda de IA. Organiza o mundo da his
 
 ## Status atual
 
-- Marco em andamento: **M3** (publicação)
+- Marco em andamento: **M4a** (app local: servidor, barra lateral, nova sessão)
 - Atualize esta linha ao fechar cada marco.
 
 ## Roteiro
 
-| Marco | Entrega | Versão |
-|---|---|---|
-| M0 | Esqueleto: TypeScript, testes, CLI que roda | |
-| M1 | `init` (cria a pasta da história a partir de `templates/`) e `check` (valida as fichas) | v0.1 |
-| M2 | `pack` (acha as fichas da cena, monta o pacote, estima tokens) | v0.1 |
-| M3 | Publicação: CI no GitHub, pacote no npm, README com GIF, mundo de exemplo | v0.1 |
-| M4 | `apply`: aplica as mudanças do fechamento de sessão, com diff e confirmação | v0.2 |
-| M5 | Checagem de nomes contra o `alfabeto.md` (repetidos ou parecidos) | v0.3 |
-| M6 | Interface web estática sobre o mesmo núcleo | v1.0 |
+| Marco | Entrega |
+|---|---|
+| M0 | Esqueleto |
+| M1 | `init` e `check` |
+| M2 | `pack` |
+| M3 | Sessões e capítulos |
+| M4a | App local: servidor, barra lateral, nova sessão |
+| M4b | Terminal embutido |
+| M5 | `apply` (aprovação do fechamento) |
+| M6 | Publicação |
 
-Fora do escopo até a v1: chamar API de IA, contas de usuário, servidor, sincronização na nuvem, editor de texto próprio. Ideia nova vai para `docs/V2.md`.
+Fora do escopo até a v1: chamar API de IA, contas de usuário, hospedagem online e servidor acessível fora do próprio computador, sincronização na nuvem, editor de texto próprio. Ideia nova vai para `docs/V2.md`.
 
 ## Princípios
 
@@ -32,13 +33,15 @@ Fora do escopo até a v1: chamar API de IA, contas de usuário, servidor, sincro
 5. **Mensagens de erro úteis.** Sempre: qual arquivo, qual campo, o que está errado e como consertar. Nada de stack trace para o usuário.
 6. **Poucas dependências.** Cada dependência nova precisa de motivo registrado em `docs/DECISOES.md`.
 7. **Nenhuma história real no repositório.** Só templates e exemplos inventados. O autor usa a ferramenta na própria história em outra pasta, privada.
+8. **O app é local.** O servidor só escuta em 127.0.0.1 e nunca é exposto na rede.
+9. **Nada amarrado a uma IA.** O comando que o terminal abre é configurável, e sempre existe a opção de só copiar o pacote.
 
 ## Arquitetura
 
 ```
 src/
-  core/        # funções puras: schema da ficha, validação, (M2) montagem do pacote
-  cli/         # comandos: init, check, (M2) pack. Lê e escreve arquivos.
+  core/        # funções puras: schemas da ficha e da sessão, validação, montagem do pacote, capítulos e sessões
+  cli/         # comandos: init, check, pack, capitulo, sessao. Lê e escreve arquivos.
   index.ts     # ponto de entrada da CLI
 templates/     # o que o `init` copia para a pasta da história
 tests/
@@ -60,6 +63,12 @@ Markdown com cabeçalho YAML, em `fichas/<tipo>/<id>.md`. Modelo em `templates/m
 - `status`: opcional, texto.
 - `aparece_em`: opcional, lista de textos.
 - O corpo é livre (markdown).
+
+## Capítulos e sessões
+
+- Capítulo: `capitulos/cap-NN.md`. Título = primeiro cabeçalho `# `; sem ele, o nome do arquivo.
+- Sessão: pasta `sessoes/<id>/` com `sessao.md`, `pacote.md` e, depois de fechada, `fechamento.md`. Id `data-capítulo-sequência` (`2026-10-01-cap-03-01`), igual ao nome da pasta.
+- Cabeçalho do `sessao.md`: `id`, `capitulo` (precisa existir em `capitulos/`), `criada_em` (ISO), `status` (`aberta` | `fechada`), `fechada_em` (obrigatório se fechada). Corpo: `## Plano` e, depois de fechada, `## Resumo` opcional.
 
 ## Stack e convenções
 
