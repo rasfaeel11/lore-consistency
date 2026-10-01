@@ -1,7 +1,8 @@
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { join, resolve, sep } from "node:path";
-import { isFichaPath, validateStory, type Problem, type StoryFile } from "../core/validate.js";
+import { existsSync, statSync } from "node:fs";
+import { resolve } from "node:path";
+import { isFichaPath, validateStory, type Problem } from "../core/validate.js";
 import { fail, type CliResult } from "./result.js";
+import { readStoryFiles } from "./story-files.js";
 
 // Lê a pasta da história, valida e monta o relatório. Sai com 1 se houver algum erro.
 export function check(folder: string = "."): CliResult {
@@ -24,23 +25,8 @@ export function check(folder: string = "."): CliResult {
   };
 }
 
-// Lê só o que a validação usa: os .md da raiz e os .md dentro de fichas/.
-function readStoryFiles(root: string): StoryFile[] {
-  const files: StoryFile[] = [];
-  for (const relative of readdirSync(root, { recursive: true, encoding: "utf8" })) {
-    // O núcleo espera caminhos com "/", mesmo no Windows.
-    const path = relative.split(sep).join("/");
-    const isRootFile = !path.includes("/");
-    if (!path.endsWith(".md") || !(isRootFile || path.startsWith("fichas/"))) continue;
-
-    const fullPath = join(root, relative);
-    if (!statSync(fullPath).isFile()) continue;
-    files.push({ path, content: readFileSync(fullPath, "utf8") });
-  }
-  return files;
-}
-
-function formatReport(problems: Problem[], fichaCount: number): string {
+// Relatório agrupado por arquivo. O pack também usa, quando a validação falha.
+export function formatReport(problems: Problem[], fichaCount: number): string {
   const validated = plural(fichaCount, "ficha validada", "fichas validadas");
   if (problems.length === 0) {
     return `Tudo certo: ${validated}.\n`;

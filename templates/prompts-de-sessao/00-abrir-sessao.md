@@ -1,5 +1,5 @@
 Quando usar: primeira mensagem de toda conversa nova.
-Preencha os blocos entre colchetes e apague os que não usar.
+O comando `lore-pack pack` preenche os marcadores {{...}} sozinho e omite os blocos vazios. Para montar à mão, troque cada marcador pelo conteúdo e apague os blocos que não usar. Você pode personalizar o texto: o pack usa este arquivo enquanto ele tiver os marcadores.
 
 ## Copie a partir daqui
 
@@ -15,16 +15,16 @@ Regras:
 Antes de escrever qualquer coisa, responda em no máximo 8 linhas: onde estamos na história, quais setups estão abertos e se você vê alguma contradição ou lacuna no pacote. Depois espere minha instrução.
 
 === BÍBLIA ===
-[COLE AQUI]
+{{biblia}}
 
 === ESTADO ===
-[COLE AQUI o estado.md]
+{{estado}}
 
 === FICHAS DESTA SESSÃO ===
-[COLE AQUI só as fichas das entidades que vão aparecer]
+{{fichas}}
 
 === ALFABETO (só se for criar nomes) ===
-[COLE AQUI ou apague este bloco]
+{{alfabeto}}
 
 === ÚLTIMA CENA ===
-[COLE AQUI só a última cena escrita, para manter a voz]
+{{ultima_cena}}

@@ -1,6 +1,7 @@
 import { parseArgs } from "node:util";
 import { check } from "./check.js";
 import { init } from "./init.js";
+import { pack } from "./pack.js";
 import { fail, ok, type CliResult } from "./result.js";
 
 const HELP = `lore-pack: organiza o mundo da sua história e monta o pacote de contexto para a IA.
@@ -11,7 +12,8 @@ Uso:
 Comandos:
   init <pasta>     cria a pasta da história a partir dos modelos
   check [pasta]    valida as fichas (padrão: a pasta atual)
-  pack             monta o pacote de contexto de uma cena (em breve)
+  pack --cena <plano.md> [pasta]
+                   monta o pacote de contexto da sessão (veja "lore-pack pack --help")
 
 Opções:
   -h, --help       mostra esta ajuda
@@ -19,6 +21,9 @@ Opções:
 `;
 
 export function main(args: string[], version: string): CliResult {
+  // O pack tem opções próprias (--cena, --com...), então ele mesmo lê os argumentos dele.
+  if (args[0] === "pack") return pack(args.slice(1));
+
   let parsed;
   try {
     parsed = parseArgs({

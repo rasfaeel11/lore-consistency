@@ -1,5 +1,6 @@
 import { FOLDER_BY_TIPO, fichaSchema, type Ficha } from "./ficha.js";
 import { splitFrontmatter } from "./frontmatter.js";
+import { normalize } from "./normalize.js";
 
 // Um arquivo da pasta da história, já lido. O caminho é relativo à pasta e usa "/".
 export type StoryFile = {
@@ -52,6 +53,23 @@ export function validateStory(files: StoryFile[]): Problem[] {
   problems.push(...findWrongFolders(valid));
 
   return problems;
+}
+
+// Uma ficha válida, com o arquivo de onde veio.
+export type FichaFile = {
+  path: string;
+  content: string;
+  ficha: Ficha;
+};
+
+// Devolve as fichas válidas da pasta. Fichas com erro ficam de fora: rode validateStory antes.
+export function readFichas(files: StoryFile[]): FichaFile[] {
+  const fichas: FichaFile[] = [];
+  for (const file of files.filter((f) => isFichaPath(f.path))) {
+    const { ficha } = validateFicha(file);
+    if (ficha) fichas.push({ path: file.path, content: file.content, ficha });
+  }
+  return fichas;
 }
 
 function validateFicha(file: StoryFile): { problems: Problem[]; ficha?: Ficha } {
@@ -164,12 +182,7 @@ function findWrongFolders(valid: { path: string; ficha: Ficha }[]): Problem[] {
 
 // Compara nomes sem diferenciar maiúsculas, acentos e espaços extras.
 function normalizeName(name: string): string {
-  return name
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .toLowerCase()
-    .replace(/\s+/g, " ")
-    .trim();
+  return normalize(name).replace(/\s+/g, " ").trim();
 }
 
 function fileNameWithoutExtension(path: string): string {

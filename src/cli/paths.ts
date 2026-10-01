@@ -1,0 +1,4 @@
+import { fileURLToPath } from "node:url";
+
+// src/cli/ (dev) e dist/cli/ (build) ficam dois níveis abaixo da raiz do pacote.
+export const TEMPLATES_DIR = fileURLToPath(new URL("../../templates", import.meta.url));

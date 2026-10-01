@@ -6,7 +6,7 @@ Ferramenta para quem escreve histórias com ajuda de IA. Organiza o mundo da his
 
 ## Status atual
 
-- Marco em andamento: **M2** (`pack`)
+- Marco em andamento: **M3** (publicação)
 - Atualize esta linha ao fechar cada marco.
 
 ## Roteiro

@@ -1,10 +1,7 @@
 import { cpSync, existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import { basename, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { TEMPLATES_DIR } from "./paths.js";
 import { fail, ok, type CliResult } from "./result.js";
-
-// src/cli/init.ts (dev) e dist/cli/init.js (build) ficam dois níveis abaixo da raiz do pacote.
-const TEMPLATES_DIR = fileURLToPath(new URL("../../templates", import.meta.url));
 
 // Cria a pasta da história copiando templates/. Recusa pasta que já tenha conteúdo.
 export function init(folder: string | undefined): CliResult {

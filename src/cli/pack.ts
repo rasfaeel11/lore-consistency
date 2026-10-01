@@ -1,0 +1,283 @@
+import { existsSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { parseArgs } from "node:util";
+import {
+  buildPack,
+  hasPackMarkers,
+  isGeneratedByPack,
+  PACK_MARK,
+  PACK_MARKERS,
+  type PackSections,
+} from "../core/pack.js";
+import { lastScene, latestChapter } from "../core/scene.js";
+import { selectFichas, type SelectedFicha } from "../core/select.js";
+import { estimateTokens } from "../core/tokens.js";
+import { isFichaPath, readFichas, validateStory, type StoryFile } from "../core/validate.js";
+import { formatReport } from "./check.js";
+import { TEMPLATES_DIR } from "./paths.js";
+import { fail, ok, type CliResult } from "./result.js";
+import { readStoryFiles, readText } from "./story-files.js";
+
+const USAGE = `Uso:
+  lore-pack pack --cena <plano.md> [opções] [pasta]
+
+Monta a mensagem de abertura da sessão: bíblia, estado, as fichas citadas no plano
+e na última cena, e a última cena. Grava num arquivo para você colar em qualquer IA.
+
+Opções:
+  --cena <arquivo>     plano da próxima cena (obrigatório)
+  --com <ids>          inclui fichas mesmo sem citação (separe com vírgula)
+  --sem <ids>          tira fichas do pacote (separe com vírgula)
+  --alfabeto           inclui o alfabeto.md (para sessões que vão criar nomes)
+  --sem-ultima-cena    não inclui a última cena
+  --limite <tokens>    avisa se o pacote passar desse número de tokens
+  --saida <arquivo>    onde gravar (padrão: pacote.md na pasta da história)
+  -h, --help           mostra esta ajuda
+`;
+
+const TEMPLATE_PATH = "prompts-de-sessao/00-abrir-sessao.md";
+
+const SECTION_LABELS: Record<keyof PackSections, string> = {
+  biblia: "bíblia",
+  estado: "estado",
+  fichas: "fichas",
+  alfabeto: "alfabeto",
+  ultima_cena: "última cena",
+};
+
+export function pack(args: string[]): CliResult {
+  let parsed;
+  try {
+    parsed = parseArgs({
+      args,
+      options: {
+        cena: { type: "string" },
+        com: { type: "string", multiple: true },
+        sem: { type: "string", multiple: true },
+        alfabeto: { type: "boolean" },
+        "sem-ultima-cena": { type: "boolean" },
+        limite: { type: "string" },
+        saida: { type: "string" },
+        help: { type: "boolean", short: "h" },
+      },
+      allowPositionals: true,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return fail(`${message}\nRode "lore-pack pack --help" para ver as opções.`);
+  }
+  const options = parsed.values;
+
+  if (options.help) return ok(USAGE);
+  if (!options.cena) {
+    return fail(`Informe o plano da cena com --cena.\n\n${USAGE}`);
+  }
+
+  let limit: number | undefined;
+  if (options.limite !== undefined) {
+    if (!/^\d+$/.test(options.limite) || Number(options.limite) === 0) {
+      return fail(`--limite precisa ser um número inteiro de tokens, por exemplo: --limite 8000`);
+    }
+    limit = Number(options.limite);
+  }
+
+  const folder = parsed.positionals[0] ?? ".";
+  const root = resolve(folder);
+  if (!isDirectory(root)) {
+    return fail(
+      `A pasta "${folder}" não existe. Confira o caminho ou crie uma história com "lore-pack init <pasta>".`,
+    );
+  }
+
+  const planPath = resolve(options.cena);
+  if (!isFile(planPath)) {
+    return fail(`O plano da cena "${options.cena}" não existe. Confira o caminho do --cena.`);
+  }
+
+  // Mesma validação do check: com erro nas fichas, não monta pacote.
+  const files = readStoryFiles(root);
+  const problems = validateStory(files);
+  if (problems.some((problem) => problem.severity === "erro")) {
+    const fichaCount = files.filter((file) => isFichaPath(file.path)).length;
+    return fail(
+      `${formatReport(problems, fichaCount)}\nCorrija os erros acima antes de montar o pacote.`,
+    );
+  }
+  const warningCount = problems.length;
+
+  // Última cena: do capítulo mais recente de capitulos/, a não ser que o usuário peça para omitir.
+  const chapter = options["sem-ultima-cena"] ? undefined : findLatestChapter(root);
+  const scene = chapter ? lastScene(readText(join(root, chapter))) : "";
+
+  const fichaFiles = readFichas(files);
+  const selection = selectFichas({
+    fichas: fichaFiles.map((f) => f.ficha),
+    plan: readText(planPath),
+    lastScene: scene,
+    include: splitIds(options.com),
+    exclude: splitIds(options.sem),
+  });
+  if (!selection.ok) return fail(selection.errors.join("\n"));
+
+  let alfabeto = "";
+  if (options.alfabeto) {
+    const file = rootFile(files, "alfabeto.md");
+    if (!file) {
+      return fail(`--alfabeto: não existe alfabeto.md na pasta da história. Crie o arquivo ou rode sem --alfabeto.`);
+    }
+    alfabeto = file.content;
+  }
+
+  const template = chooseTemplate(root);
+  const sections: PackSections = {
+    biblia: rootFile(files, "biblia.md")?.content ?? "",
+    estado: rootFile(files, "estado.md")?.content ?? "",
+    fichas: selection.selected
+      .map((s) => fichaFiles.find((f) => f.ficha.id === s.id)?.content.trim() ?? "")
+      .join("\n\n"),
+    alfabeto,
+    ultima_cena: scene,
+  };
+  const content = `${PACK_MARK}\n${buildPack(template.text, sections)}`;
+
+  // Princípio 4: só sobrescreve arquivo que o próprio pack gerou.
+  const output = options.saida ? resolve(options.saida) : join(root, "pacote.md");
+  if (existsSync(output)) {
+    if (!isFile(output)) {
+      return fail(`"${output}" é uma pasta. Escolha um arquivo com --saida.`);
+    }
+    if (!isGeneratedByPack(readText(output))) {
+      return fail(
+        `O arquivo "${output}" já existe e não foi gerado pelo lore-pack (não começa com a marca "<!-- lore-pack:").\nPara não apagar o seu texto, o pack não vai sobrescrevê-lo. Escolha outro arquivo com --saida, ou renomeie/apague esse arquivo.`,
+      );
+    }
+  }
+  writeFileSync(output, content);
+
+  const warnings: string[] = [];
+  if (template.usedDefault) {
+    warnings.push(
+      `O seu ${TEMPLATE_PATH} não existe ou não tem os marcadores {{...}} (pode ter sido criado por uma versão antiga). Usei o modelo padrão. Para personalizar, copie o modelo novo de ${join(TEMPLATES_DIR, TEMPLATE_PATH)}.`,
+    );
+  }
+  if (warningCount > 0) {
+    warnings.push(
+      `As fichas têm ${warningCount === 1 ? "1 aviso" : `${warningCount} avisos`}. Rode "lore-pack check" para ver.`,
+    );
+  }
+
+  return ok(
+    formatSummary({
+      output,
+      selected: selection.selected,
+      chapter,
+      sceneOmitted: Boolean(options["sem-ultima-cena"]),
+      sections,
+      template: template.text,
+      total: estimateTokens(content),
+      limit,
+      warnings,
+    }),
+  );
+}
+
+// "--com a,b --com c" vira ["a", "b", "c"].
+function splitIds(values: string[] | undefined): string[] {
+  return (values ?? [])
+    .flatMap((value) => value.split(","))
+    .map((id) => id.trim())
+    .filter((id) => id !== "");
+}
+
+function findLatestChapter(root: string): string | undefined {
+  const dir = join(root, "capitulos");
+  if (!isDirectory(dir)) return undefined;
+  const names = readdirSync(dir).filter((name) => name.endsWith(".md") && isFile(join(dir, name)));
+  const latest = latestChapter(names);
+  return latest ? `capitulos/${latest}` : undefined;
+}
+
+// Usa o 00 do usuário se ele tiver os marcadores; senão, o modelo que vem com o lore-pack.
+function chooseTemplate(root: string): { text: string; usedDefault: boolean } {
+  const userTemplate = join(root, TEMPLATE_PATH);
+  if (isFile(userTemplate)) {
+    const text = readText(userTemplate);
+    if (hasPackMarkers(text)) return { text, usedDefault: false };
+  }
+  return { text: readText(join(TEMPLATES_DIR, TEMPLATE_PATH)), usedDefault: true };
+}
+
+function rootFile(files: StoryFile[], name: string): StoryFile | undefined {
+  return files.find((file) => file.path === name);
+}
+
+function isFile(path: string): boolean {
+  return existsSync(path) && statSync(path).isFile();
+}
+
+function isDirectory(path: string): boolean {
+  return existsSync(path) && statSync(path).isDirectory();
+}
+
+type SummaryInput = {
+  output: string;
+  selected: SelectedFicha[];
+  chapter: string | undefined;
+  sceneOmitted: boolean;
+  sections: PackSections;
+  template: string;
+  total: number;
+  limit: number | undefined;
+  warnings: string[];
+};
+
+function formatSummary(input: SummaryInput): string {
+  const lines = [`Pacote gravado em ${input.output}`, ""];
+
+  if (input.selected.length === 0) {
+    lines.push("Fichas no pacote: nenhuma. Cite nomes ou aliases no plano, ou use --com.");
+  } else {
+    lines.push(`Fichas no pacote (${input.selected.length}):`);
+    const idWidth = Math.max(...input.selected.map((s) => s.id.length));
+    const reasons = input.selected.map((s) => s.reasons.join(", "));
+    const reasonWidth = Math.max(...reasons.map((r) => r.length));
+    input.selected.forEach((s, i) => {
+      const matched = s.matched.length > 0 ? `casou: ${s.matched.map((m) => `"${m}"`).join(", ")}` : "";
+      lines.push(`  ${s.id.padEnd(idWidth)}  ${(reasons[i] ?? "").padEnd(reasonWidth)}  ${matched}`.trimEnd());
+    });
+  }
+
+  if (input.sceneOmitted) lines.push("Última cena: omitida (--sem-ultima-cena)");
+  else if (input.chapter) lines.push(`Última cena: ${input.chapter}`);
+  else lines.push("Última cena: nenhum capítulo em capitulos/");
+
+  // Tokens só das seções que entraram no pacote (não vazias e com marcador no modelo).
+  const included = PACK_MARKERS.filter(
+    (key) => input.sections[key].trim() !== "" && input.template.includes(`{{${key}}}`),
+  ).map((key) => ({ label: SECTION_LABELS[key], tokens: estimateTokens(input.sections[key].trim()) }));
+
+  lines.push("", "Tokens (estimativa aproximada: ~1 token a cada 3 caracteres):");
+  for (const section of included) {
+    lines.push(`  ${section.label.padEnd(12)} ${formatNumber(section.tokens).padStart(8)}`);
+  }
+  lines.push(`  ${"total".padEnd(12)} ${`~${formatNumber(input.total)}`.padStart(8)}  (inclui as instruções do modelo)`);
+
+  if (input.limit !== undefined && input.total > input.limit) {
+    const largest = included.reduce((a, b) => (b.tokens > a.tokens ? b : a), included[0] ?? { label: "-", tokens: 0 });
+    lines.push(
+      "",
+      "!!! ATENÇÃO !!!",
+      `O pacote (~${formatNumber(input.total)} tokens) passa do limite de ${formatNumber(input.limit)}.`,
+      `A maior seção é "${largest.label}" (~${formatNumber(largest.tokens)} tokens). Considere compactá-la (prompt 07-compactar) ou tirar fichas com --sem.`,
+    );
+  }
+
+  if (input.warnings.length > 0) {
+    lines.push("", "Avisos:", ...input.warnings.map((w) => `  - ${w}`));
+  }
+  return `${lines.join("\n")}\n`;
+}
+
+function formatNumber(value: number): string {
+  return value.toLocaleString("pt-BR");
+}
