@@ -73,7 +73,8 @@ export type PackOptions = {
 
 export type PackRequest = PackOptions & {
   root: string;
-  planPath: string;
+  // Texto do plano da cena (a CLI lê do arquivo; o app recebe do formulário).
+  plan: string;
   output: string;
   // Capítulo de onde sai a última cena. Sem ele, o mais recente que tenha texto.
   chapter?: string;
@@ -143,12 +144,12 @@ export function pack(args: string[]): CliResult {
   return writePack({
     ...common.options,
     root,
-    planPath,
+    plan: readText(planPath),
     output: options.saida ? resolve(options.saida) : join(root, "pacote.md"),
   });
 }
 
-// Monta o pacote e grava em request.output. Quem chama já conferiu a pasta e o plano.
+// Monta o pacote e grava em request.output. Quem chama já conferiu a pasta.
 export function writePack(request: PackRequest): CliResult {
   const { root } = request;
 
@@ -170,7 +171,7 @@ export function writePack(request: PackRequest): CliResult {
   const fichaFiles = readFichas(files);
   const selection = selectFichas({
     fichas: fichaFiles.map((f) => f.ficha),
-    plan: readText(request.planPath),
+    plan: request.plan,
     lastScene: scene,
     include: request.include,
     exclude: request.exclude,

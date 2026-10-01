@@ -65,6 +65,23 @@ export function sessionFolder(path: string): string | undefined {
   return SESSION_PATH.exec(path)?.[1];
 }
 
+export function isSessionId(id: string): boolean {
+  return SESSION_ID.test(id);
+}
+
+export type ReadSessionResult = { ok: true; session: Session; body: string } | { ok: false; error: string };
+
+// Lê um sessao.md: cabeçalho validado e corpo (plano e resumo).
+export function readSession(content: string): ReadSessionResult {
+  const split = splitFrontmatter(content);
+  if (!split.ok) return { ok: false, error: split.error };
+  const parsed = sessionSchema.safeParse(split.data);
+  if (!parsed.success) {
+    return { ok: false, error: 'O cabeçalho da sessão é inválido. Rode "lore-pack check" para ver o problema.' };
+  }
+  return { ok: true, session: parsed.data, body: split.body };
+}
+
 // Sessões válidas agrupadas por capítulo, capítulos em ordem numérica e sessões em ordem de id.
 // Sessões com cabeçalho inválido ficam de fora: o check acusa.
 export function listSessions(files: StoryFile[]): SessionGroup[] {

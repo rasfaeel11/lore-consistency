@@ -3,9 +3,11 @@ import { splitFrontmatter } from "../../src/core/frontmatter.js";
 import {
   buildStartPrompt,
   closeSession,
+  isSessionId,
   listSessions,
   newSessionFile,
   nextSessionId,
+  readSession,
   sessionSchema,
 } from "../../src/core/session.js";
 
@@ -169,5 +171,36 @@ describe("buildStartPrompt", () => {
     expect(buildStartPrompt("sessoes/2026-10-01-cap-03-01/pacote.md")).toBe(
       "Leia o arquivo sessoes/2026-10-01-cap-03-01/pacote.md e siga as instruções dele.",
     );
+  });
+});
+
+describe("isSessionId", () => {
+  it("aceita data-capítulo-sequência e recusa o resto", () => {
+    expect(isSessionId("2026-10-01-cap-03-01")).toBe(true);
+    expect(isSessionId("../biblia")).toBe(false);
+    expect(isSessionId("2026-10-01-cap-03")).toBe(false);
+  });
+});
+
+describe("readSession", () => {
+  it("separa o cabeçalho validado do corpo", () => {
+    const result = readSession(sessao("2026-10-01-cap-01-01", "cap-01", "aberta").content);
+
+    expect(result).toEqual({
+      ok: true,
+      session: {
+        id: "2026-10-01-cap-01-01",
+        capitulo: "cap-01",
+        criada_em: "2026-10-01T12:00:00.000Z",
+        status: "aberta",
+      },
+      body: "## Plano\n",
+    });
+  });
+
+  it("cabeçalho inválido vira erro", () => {
+    const result = readSession(sessao("2026-10-01-cap-01-01", "cap-01", "pausada").content);
+
+    expect(result.ok).toBe(false);
   });
 });

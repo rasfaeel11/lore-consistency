@@ -11,7 +11,7 @@ import {
 } from "../core/session.js";
 import { isFichaPath, validateStory } from "../core/validate.js";
 import { formatReport } from "./check.js";
-import { PACK_OPTIONS, readPackOptions, writePack } from "./pack.js";
+import { PACK_OPTIONS, readPackOptions, writePack, type PackOptions } from "./pack.js";
 import { fail, ok, type CliResult } from "./result.js";
 import { findStoryRoot, isDirectory, isFile, readStoryFiles, readText } from "./story-files.js";
 
@@ -73,57 +73,66 @@ function newSession(args: string[]): CliResult {
     return fail(`O plano "${options.plano}" não existe. Confira o caminho do --plano.`);
   }
 
-  const files = readStoryFiles(root);
-  const chapterIds = listChapters(files).map((chapter) => chapter.id);
-  if (!chapterIds.includes(options.capitulo)) {
-    const available = chapterIds.length > 0 ? `Capítulos existentes: ${chapterIds.join(", ")}.` : "Ainda não há capítulos.";
-    return fail(
-      `O capítulo "${options.capitulo}" não existe em capitulos/. ${available}\nUse um deles ou crie um novo com: lore-pack capitulo novo "<título>"`,
-    );
-  }
+  const created = createSession({ ...common.options, root, capitulo: options.capitulo, plan: readText(planPath) });
+  if (!created.ok) return fail(created.error);
 
-  // Com erro na pasta, nem cria a sessão (o pack recusaria do mesmo jeito).
-  const problems = validateStory(files);
-  if (problems.some((problem) => problem.severity === "erro")) {
-    const fichaCount = files.filter((file) => isFichaPath(file.path)).length;
-    return fail(`${formatReport(problems, fichaCount)}\nCorrija os erros acima antes de abrir uma sessão.`);
-  }
+  const packPath = `sessoes/${created.id}/pacote.md`;
+  return ok(`Sessão ${created.id} criada em sessoes/${created.id}/
 
-  // Conta todas as pastas de sessoes/, mesmo as inválidas, para nunca reusar um nome.
-  const sessionsDir = join(root, "sessoes");
-  const existing = isDirectory(sessionsDir) ? readdirSync(sessionsDir) : [];
-  const now = new Date();
-  const id = nextSessionId(options.capitulo, existing, now);
-  const folder = join(sessionsDir, id);
-
-  mkdirSync(folder, { recursive: true });
-  writeFileSync(
-    join(folder, "sessao.md"),
-    newSessionFile({ id, capitulo: options.capitulo, criada_em: now.toISOString(), plano: readText(planPath) }),
-  );
-  const packResult = writePack({
-    ...common.options,
-    root,
-    planPath,
-    output: join(folder, "pacote.md"),
-    chapter: options.capitulo,
-  });
-  if (packResult.exitCode !== 0) {
-    // A pasta acabou de ser criada por nós: apagar não perde nada do usuário.
-    rmSync(folder, { recursive: true, force: true });
-    return packResult;
-  }
-
-  const packPath = `sessoes/${id}/pacote.md`;
-  return ok(`Sessão ${id} criada em sessoes/${id}/
-
-${packResult.stdout}
+${created.summary}
 Para começar no Claude Code, abra o terminal na pasta da história e rode:
   cd "${root}"
   claude "${buildStartPrompt(packPath)}"
 
 Com outra IA, cole o conteúdo de ${packPath} na conversa.
 `);
+}
+
+export type NewSessionRequest = PackOptions & {
+  root: string;
+  capitulo: string;
+  plan: string;
+};
+
+export type NewSessionResult = { ok: true; id: string; summary: string } | { ok: false; error: string };
+
+// Cria sessoes/<id>/ com o sessao.md e o pacote.md. Usado pelo "sessao nova" e pelo app.
+// Quem chama já conferiu que a pasta é uma história.
+export function createSession(request: NewSessionRequest): NewSessionResult {
+  const { root, capitulo } = request;
+  const files = readStoryFiles(root);
+  const chapterIds = listChapters(files).map((chapter) => chapter.id);
+  if (!chapterIds.includes(capitulo)) {
+    const available = chapterIds.length > 0 ? `Capítulos existentes: ${chapterIds.join(", ")}.` : "Ainda não há capítulos.";
+    return {
+      ok: false,
+      error: `O capítulo "${capitulo}" não existe em capitulos/. ${available}\nUse um deles ou crie um novo com: lore-pack capitulo novo "<título>"`,
+    };
+  }
+
+  // Com erro na pasta, nem cria a sessão (o pack recusaria do mesmo jeito).
+  const problems = validateStory(files);
+  if (problems.some((problem) => problem.severity === "erro")) {
+    const fichaCount = files.filter((file) => isFichaPath(file.path)).length;
+    return { ok: false, error: `${formatReport(problems, fichaCount)}\nCorrija os erros acima antes de abrir uma sessão.` };
+  }
+
+  // Conta todas as pastas de sessoes/, mesmo as inválidas, para nunca reusar um nome.
+  const sessionsDir = join(root, "sessoes");
+  const existing = isDirectory(sessionsDir) ? readdirSync(sessionsDir) : [];
+  const now = new Date();
+  const id = nextSessionId(capitulo, existing, now);
+  const folder = join(sessionsDir, id);
+
+  mkdirSync(folder, { recursive: true });
+  writeFileSync(join(folder, "sessao.md"), newSessionFile({ id, capitulo, criada_em: now.toISOString(), plano: request.plan }));
+  const packResult = writePack({ ...request, output: join(folder, "pacote.md"), chapter: capitulo });
+  if (packResult.exitCode !== 0) {
+    // A pasta acabou de ser criada por nós: apagar não perde nada do usuário.
+    rmSync(folder, { recursive: true, force: true });
+    return { ok: false, error: packResult.stderr.trimEnd() };
+  }
+  return { ok: true, id, summary: packResult.stdout };
 }
 
 function listCommand(args: string[]): CliResult {

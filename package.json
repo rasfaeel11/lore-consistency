@@ -8,7 +8,8 @@
   },
   "files": [
     "dist",
-    "templates"
+    "templates",
+    "web"
   ],
   "scripts": {
     "dev": "tsx src/index.ts",

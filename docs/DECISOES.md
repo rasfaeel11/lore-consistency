@@ -81,3 +81,16 @@ Motivo: contar de verdade exigiria o tokenizador de cada IA (dependência nova e
 - **O cabeçalho é gerado com o `stringify` do pacote `yaml`**, que já é dependência. O YAML 1.2 não transforma datas em objeto, então `criada_em` volta como texto.
 - **Se o pack falhar no `sessao nova`**, a pasta recém-criada da sessão é apagada, para não sobrar sessão sem pacote.
 - **`sessao nova` não executa nada:** só imprime o comando sugerido (`claude "Leia o arquivo ... e siga as instruções dele."`) e a alternativa de colar o pacote em outra IA.
+
+## 2026-10-01: app local (M4a)
+
+- **Servidor com `node:http`, sem framework.** São quatro rotas JSON e três arquivos estáticos; Express ou Fastify seriam dependência sem ganho. O código fica em `src/server/`, uma borda nova ao lado de `src/cli/`, e reaproveita as funções de leitura e escrita da CLI.
+- **Comando `lore-pack app [pasta] [--porta N]`**, porta padrão 4777. É o único comando assíncrono (deixa o servidor rodando até o Ctrl+C), por isso o `index.ts` o chama à parte do `main`. Não abre o navegador sozinho: imprime o endereço.
+- **Só 127.0.0.1 (princípio 8), e mais três proteções**, porque qualquer site aberto no navegador consegue mandar pedidos para `127.0.0.1`:
+  - o cabeçalho `Host` precisa ser `127.0.0.1:<porta>` ou `localhost:<porta>` (bloqueia "DNS rebinding");
+  - se vier `Origin`, ela precisa ser o próprio app;
+  - o `POST` só aceita `Content-Type: application/json`, que um formulário de outro site não consegue mandar sem permissão do servidor (CORS), e o servidor nunca dá essa permissão.
+- **Arquivos estáticos numa lista fechada** (`/`, `/app.js`, `/style.css`): nenhum caminho vindo do navegador vira caminho no disco. Ids de sessão passam pelo mesmo padrão do `sessao.md` antes de montar o caminho.
+- **Página em HTML, CSS e JavaScript puro, em `web/`**, sem bundler e sem TypeScript no navegador. Compilar TS para o navegador pediria uma segunda configuração de build ou um bundler; para uma página pequena não compensa. Reavaliar no M4b se o xterm.js deixar o código do navegador maior. Todo texto da história entra com `textContent`, nunca como HTML.
+- **`createSession` saiu do `sessao nova`** para o app usar a mesma lógica. O `writePack` passou a receber o texto do plano (`plan`) em vez do caminho, porque no app o plano vem do formulário. A CLI lê o arquivo e passa o texto.
+- **O botão "Copiar pacote"** usa a área de transferência do navegador (princípio 9: sempre dá para só copiar). O `--copiar` da CLI continua no V2.

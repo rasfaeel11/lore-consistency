@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>lore-pack</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <aside id="barra">
+      <header>
+        <p class="marca">lore-pack</p>
+        <h1 id="nome-historia">…</h1>
+      </header>
+      <button id="botao-nova" type="button">+ Nova sessão</button>
+      <p id="aviso-erros" class="aviso" hidden></p>
+      <nav id="capitulos" aria-label="Capítulos e sessões"></nav>
+    </aside>
+
+    <main id="conteudo">
+      <section id="inicio">
+        <h2>Escolha uma sessão</h2>
+        <p>Clique numa sessão na barra lateral ou crie uma nova.</p>
+      </section>
+
+      <section id="nova" hidden>
+        <h2>Nova sessão</h2>
+        <form id="form-nova">
+          <label>
+            Capítulo
+            <select name="capitulo" required></select>
+          </label>
+          <label>
+            Plano da cena
+            <textarea name="plano" rows="10" required placeholder="O que acontece na próxima cena? Cite os personagens e lugares pelo nome."></textarea>
+          </label>
+          <details>
+            <summary>Opções do pacote</summary>
+            <label>
+              Incluir fichas (ids separados por vírgula)
+              <input name="com" type="text" placeholder="ana-ferreira, porto-sal" />
+            </label>
+            <label>
+              Tirar fichas (ids separados por vírgula)
+              <input name="sem" type="text" />
+            </label>
+            <label class="caixa"><input name="alfabeto" type="checkbox" /> Incluir o alfabeto (sessão que vai criar nomes)</label>
+            <label class="caixa"><input name="semUltimaCena" type="checkbox" /> Sem a última cena</label>
+          </details>
+          <button type="submit">Criar sessão</button>
+        </form>
+        <pre id="erro-nova" class="erro" hidden></pre>
+      </section>
+
+      <section id="sessao" hidden>
+        <p class="marca" id="sessao-capitulo"></p>
+        <h2 id="sessao-id"></h2>
+        <p id="sessao-meta"></p>
+        <pre id="sessao-resumo-pack" class="resumo" hidden></pre>
+
+        <h3>Começar</h3>
+        <p>No Claude Code, abra o terminal na pasta da história e rode:</p>
+        <div class="linha-comando">
+          <code id="sessao-comando"></code>
+          <button id="copiar-comando" type="button">Copiar comando</button>
+        </div>
+        <p>Com outra IA, copie o pacote e cole na conversa.</p>
+        <button id="copiar-pacote" type="button">Copiar pacote</button>
+        <span id="copiado" class="dica" role="status"></span>
+
+        <h3>sessao.md</h3>
+        <pre id="sessao-corpo"></pre>
+      </section>
+    </main>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
