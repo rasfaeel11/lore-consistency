@@ -12,6 +12,7 @@ describe("main", () => {
     expect(result.stdout).toContain("init");
     expect(result.stdout).toContain("check");
     expect(result.stdout).toContain("pack");
+    expect(result.stdout).toContain("ui [pasta]");
   });
 
   it("sem argumentos mostra a ajuda", () => {

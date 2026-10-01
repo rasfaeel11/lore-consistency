@@ -8,7 +8,7 @@ import { findStoryRoot } from "./story-files.js";
 const DEFAULT_PORT = 4777;
 
 const USAGE = `Uso:
-  lore-pack app [pasta] [--porta <número>]
+  lore-pack ui [pasta] [--porta <número>]
 
 Abre o app da história no navegador: capítulos e sessões na barra lateral,
 e um formulário para criar sessão nova. Só funciona neste computador (127.0.0.1).
@@ -20,7 +20,7 @@ Opções:
 
 // Diferente dos outros comandos, este deixa um servidor rodando. O server volta junto
 // para quem chamou poder fechá-lo (os testes fecham; a CLI deixa aberto até o Ctrl+C).
-export async function app(args: string[]): Promise<{ result: CliResult; server?: Server }> {
+export async function ui(args: string[]): Promise<{ result: CliResult; server?: Server }> {
   let parsed;
   try {
     parsed = parseArgs({
@@ -30,7 +30,7 @@ export async function app(args: string[]): Promise<{ result: CliResult; server?:
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return { result: fail(`${message}\nRode "lore-pack app --help" para ver as opções.`) };
+    return { result: fail(`${message}\nRode "lore-pack ui --help" para ver as opções.`) };
   }
   if (parsed.values.help) return { result: ok(USAGE) };
 

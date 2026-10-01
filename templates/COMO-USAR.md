@@ -12,7 +12,7 @@ Uma pasta, arquivos curtos, uma conversa nova por capítulo. O que não está no
 - `sessoes/`: uma pasta por sessão de escrita, com o plano (`sessao.md`), o pacote (`pacote.md`) e o fechamento. Crie com `lore-pack sessao nova`, veja com `lore-pack sessao listar` e feche com `lore-pack sessao fechar`.
 - `modelos/`: modelo de ficha.
 
-Prefere janela a terminal? Rode `lore-pack app` na pasta da história e abra o endereço que ele mostrar: capítulos e sessões na barra lateral, botão de nova sessão e de copiar o pacote. Só funciona no seu computador.
+Prefere janela a terminal? Rode `lore-pack ui` na pasta da história e abra o endereço que ele mostrar: capítulos e sessões na barra lateral, botão de nova sessão e de copiar o pacote. Só funciona no seu computador.
 - `prompts-de-sessao/`: os prompts que você cola na IA, numerados na ordem de uso.
 
 ## O ritual de cada sessão
