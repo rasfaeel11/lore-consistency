@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { selectFichas } from "../../src/core/select.js";
+import { selectFichas, selectReferencias } from "../../src/core/select.js";
 
 const fichas = [
   { id: "ana", nome: "Ana Ferreira", aliases: ["Aninha"] },
@@ -79,5 +79,57 @@ describe("selectFichas", () => {
     const result = selectFichas({ fichas, plan: "Chove.", lastScene: "", include: [], exclude: [] });
 
     expect(summary(result)).toEqual([]);
+  });
+});
+
+describe("selectFichas com referências", () => {
+  it("--sem aceita id de referência, e id que não é ficha nem referência é erro", () => {
+    const ok = selectFichas({ fichas, plan: "", lastScene: "", include: [], exclude: ["magia"], referenciaIds: ["magia"] });
+    expect(ok.ok).toBe(true);
+
+    const result = selectFichas({ fichas, plan: "", lastScene: "", include: [], exclude: ["magica"], referenciaIds: ["magia"] });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors[0]).toContain("nem referência");
+  });
+});
+
+describe("selectReferencias", () => {
+  const referencias = [
+    { id: "combate", palavras_chave: ["Baluarte", "duelo"] },
+    { id: "magia", palavras_chave: ["Resto", "feitiço"] },
+    { id: "ordens", palavras_chave: ["Ordem da Chama"] },
+  ];
+
+  it("inclui a referência quando uma palavra-chave aparece no plano, sem diferenciar acentos", () => {
+    const result = selectReferencias({ referencias, plan: "Ana usa o resto num feitico.", include: [], exclude: [] });
+
+    expect(result).toEqual({ ok: true, selected: [{ id: "magia", reasons: ["plano"], matched: ["Resto", "feitiço"] }] });
+  });
+
+  it("--ref força e --sem tira", () => {
+    const result = selectReferencias({
+      referencias,
+      plan: "O Baluarte cai. Usam o Resto.",
+      include: ["ordens"],
+      exclude: ["magia"],
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      selected: [
+        { id: "combate", reasons: ["plano"], matched: ["Baluarte"] },
+        { id: "ordens", reasons: ["forçada"], matched: [] },
+      ],
+    });
+  });
+
+  it("id inexistente em --ref vira erro claro", () => {
+    const result = selectReferencias({ referencias, plan: "", include: ["magica"], exclude: [] });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.errors[0]).toContain("--ref");
+      expect(result.errors[0]).toContain('"magica"');
+    }
   });
 });

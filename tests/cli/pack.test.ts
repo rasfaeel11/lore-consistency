@@ -188,3 +188,88 @@ describe("pack", () => {
     expect(result.stderr).toContain("não existe");
   });
 });
+
+describe("pack com referências", () => {
+  const HISTORIA = fixture("pack/referencias");
+  let tempDir: string;
+  let output: string;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), "lore-pack-"));
+    output = join(tempDir, "pacote.md");
+  });
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  function pack(...args: string[]) {
+    return main(["pack", "--cena", join(HISTORIA, "plano.md"), "--saida", output, ...args, HISTORIA], "0.0.0");
+  }
+
+  it("puxa só as referências cujas palavras-chave aparecem no plano, com motivo e tokens", () => {
+    const result = pack();
+
+    expect(result.stderr).toBe("");
+    expect(result.exitCode).toBe(0);
+    const content = readNormalized(output);
+    expect(content).toContain("=== REFERÊNCIAS DESTA SESSÃO ===");
+    expect(content).toContain("id: magia");
+    expect(content).toContain("id: combate");
+    expect(content).not.toContain("id: geografia");
+    // As referências vêm depois das fichas.
+    expect(content.indexOf("id: magia")).toBeGreaterThan(content.indexOf("id: ana-ferreira"));
+
+    expect(result.stdout).toMatch(/Referências no pacote \(2\):/);
+    expect(result.stdout).toMatch(/combate\s+plano\s+casou: "Baluarte"\s+~\d+ tokens/);
+    expect(result.stdout).toMatch(/magia\s+plano\s+casou: "Resto"\s+~\d+ tokens/);
+    expect(result.stdout).toMatch(/referências\s+\d+/);
+  });
+
+  it("a última cena não puxa referências", () => {
+    // A última cena cita "Ordem da Chama" e "Conselho dos Nove".
+    const result = pack();
+
+    const content = readNormalized(output);
+    expect(content).toContain("Ordem da Chama falou");
+    expect(content).not.toContain("id: ordens");
+    expect(content).not.toContain("id: politica");
+    expect(result.stdout).not.toContain("ordens");
+  });
+
+  it("--ref força referências e --sem tira", () => {
+    const result = pack("--ref", "ordens,politica", "--sem", "magia");
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toMatch(/ordens\s+forçada/);
+    expect(result.stdout).toMatch(/politica\s+forçada/);
+    const content = readNormalized(output);
+    expect(content).toContain("id: ordens");
+    expect(content).toContain("id: combate");
+    expect(content).not.toContain("id: magia");
+  });
+
+  it("--ref com id inexistente sai com 1 e não grava nada", () => {
+    const result = pack("--ref", "magica");
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain('"magica"');
+    expect(existsSync(output)).toBe(false);
+  });
+
+  it("sem referência escolhida, o bloco some", () => {
+    const result = pack("--sem", "magia,combate");
+
+    expect(result.exitCode).toBe(0);
+    expect(readNormalized(output)).not.toContain("REFERÊNCIAS");
+    expect(result.stdout).toContain("Referências no pacote: nenhuma");
+  });
+
+  it("as referências entram no aviso de --limite", () => {
+    const result = pack("--limite", "10");
+
+    expect(result.stdout).toContain("ATENÇÃO");
+    expect(result.stdout).toMatch(/maior seção é "(referências|bíblia|estado|fichas|última cena)"/);
+    expect(result.stdout).toContain("fichas ou referências com --sem");
+  });
+});

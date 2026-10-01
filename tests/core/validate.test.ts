@@ -144,6 +144,114 @@ describe("validateStory", () => {
     expect(problems).toEqual([expect.objectContaining({ field: "tipo", severity: "aviso" })]);
     expect(problems[0]?.message).toContain("fichas/lugares/");
   });
+
+  it("aceita os tipos povo e conceito nas pastas certas", () => {
+    const problems = validateStory([
+      ...ROOT,
+      ficha("fichas/povos/anoes.md", "id: anoes", "tipo: povo", "nome: Anões"),
+      ficha("fichas/conceitos/o-vazio.md", "id: o-vazio", "tipo: conceito", "nome: O Vazio"),
+    ]);
+
+    expect(problems).toEqual([]);
+  });
+
+  it("povo e conceito fora da pasta certa são aviso", () => {
+    const problems = validateStory([
+      ...ROOT,
+      ficha("fichas/personagens/anoes.md", "id: anoes", "tipo: povo", "nome: Anões"),
+      ficha("fichas/lugares/o-vazio.md", "id: o-vazio", "tipo: conceito", "nome: O Vazio"),
+    ]);
+
+    expect(problems).toEqual([
+      expect.objectContaining({ path: "fichas/personagens/anoes.md", field: "tipo", severity: "aviso" }),
+      expect.objectContaining({ path: "fichas/lugares/o-vazio.md", field: "tipo", severity: "aviso" }),
+    ]);
+    expect(problems[0]?.message).toContain("fichas/povos/");
+    expect(problems[1]?.message).toContain("fichas/conceitos/");
+  });
+});
+
+describe("validateStory: referências", () => {
+  function referencia(id: string, ...headerLines: string[]): StoryFile {
+    return { path: `referencias/${id}.md`, content: `---\n${headerLines.join("\n")}\n---\nCorpo longo.\n` };
+  }
+
+  const BRUM_COM_ESPADA: StoryFile = {
+    path: "fichas/personagens/brum.md",
+    content: "---\nid: brum\ntipo: personagem\nnome: Brum\n---\nLeva uma espada.\n",
+  };
+
+  it("referência válida não tem problemas", () => {
+    const problems = validateStory([
+      ...ROOT,
+      referencia("magia", "id: magia", "nome: Magia", "palavras_chave: [Resto, feitiço]"),
+      referencia("combate", "id: combate", "nome: Combate"),
+    ]);
+
+    expect(problems).toEqual([]);
+  });
+
+  it("campos obrigatórios, id fora do padrão e palavras_chave que não é lista são erros", () => {
+    const problems = validateStory([
+      ...ROOT,
+      referencia("magia", "id: magia", "palavras_chave: Resto"),
+      referencia("Politica", "id: Politica", "nome: Política"),
+    ]);
+
+    expect(problems).toEqual([
+      expect.objectContaining({ path: "referencias/magia.md", field: "nome", severity: "erro" }),
+      expect.objectContaining({ path: "referencias/magia.md", field: "palavras_chave", severity: "erro" }),
+      expect.objectContaining({ path: "referencias/Politica.md", field: "id", severity: "erro" }),
+    ]);
+  });
+
+  it("id diferente do nome do arquivo é erro", () => {
+    const problems = validateStory([...ROOT, referencia("magia", "id: magias", "nome: Magia")]);
+
+    expect(problems).toEqual([expect.objectContaining({ field: "id", severity: "erro" })]);
+    expect(problems[0]?.message).toContain("magias.md");
+  });
+
+  it("id repetido entre ficha e referência é erro", () => {
+    const problems = validateStory([
+      ...ROOT,
+      ficha("fichas/conceitos/resto.md", "id: resto", "tipo: conceito", "nome: O Resto"),
+      referencia("resto", "id: resto", "nome: Resto"),
+    ]);
+
+    expect(problems).toEqual([
+      expect.objectContaining({ path: "fichas/conceitos/resto.md", field: "id", severity: "erro" }),
+      expect.objectContaining({ path: "referencias/resto.md", field: "id", severity: "erro" }),
+    ]);
+  });
+
+  it("avisa palavra-chave que aparece em mais da metade das outras fichas e referências", () => {
+    const problems = validateStory([
+      ...ROOT,
+      referencia("magia", "id: magia", "nome: Magia", "palavras_chave: [espada, Resto]"),
+      ficha("fichas/personagens/ana.md", "id: ana", "tipo: personagem", "nome: Ana", "aparece_em: [Espada curta]"),
+      BRUM_COM_ESPADA,
+      ficha("fichas/lugares/porto.md", "id: porto", "tipo: lugar", "nome: Porto"),
+    ]);
+
+    // "espada" aparece em 2 de 3 outros arquivos; "Resto" em nenhum.
+    expect(problems).toEqual([
+      expect.objectContaining({ path: "referencias/magia.md", field: "palavras_chave", severity: "aviso" }),
+    ]);
+    expect(problems[0]?.message).toContain('"espada"');
+    expect(problems[0]?.message).toContain("2 de 3");
+  });
+
+  it("palavra-chave em exatamente metade não é aviso", () => {
+    const problems = validateStory([
+      ...ROOT,
+      referencia("magia", "id: magia", "nome: Magia", "palavras_chave: [espada]"),
+      BRUM_COM_ESPADA,
+      ficha("fichas/lugares/porto.md", "id: porto", "tipo: lugar", "nome: Porto"),
+    ]);
+
+    expect(problems).toEqual([]);
+  });
 });
 
 describe("validateStory: capítulos e sessões", () => {

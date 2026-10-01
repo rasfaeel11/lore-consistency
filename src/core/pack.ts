@@ -1,4 +1,4 @@
-export const PACK_MARKERS = ["biblia", "estado", "fichas", "alfabeto", "ultima_cena"] as const;
+export const PACK_MARKERS = ["biblia", "estado", "fichas", "referencias", "alfabeto", "ultima_cena"] as const;
 
 // Conteúdo de cada marcador {{...}} do modelo de abertura de sessão.
 export type PackSections = Record<(typeof PACK_MARKERS)[number], string>;

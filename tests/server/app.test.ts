@@ -1,4 +1,4 @@
-import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { request, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -39,6 +39,14 @@ describe("servidor do app", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
+  }
+
+  function addReferencia() {
+    mkdirSync(join(story, "referencias"));
+    writeFileSync(
+      join(story, "referencias", "magia.md"),
+      "---\nid: magia\nnome: Magia\npalavras_chave: [Resto]\n---\nO Resto é o que sobra da alma.\n",
+    );
   }
 
   // O fetch não deixa trocar o Host; o http.request deixa.
@@ -92,6 +100,14 @@ describe("servidor do app", () => {
         },
       ]);
       expect(body.erros).toBe(0);
+    });
+
+    it("lista as referências para o formulário escolher", async () => {
+      addReferencia();
+
+      const body = await (await fetch(`${base}/api/historia`)).json();
+
+      expect(body.referencias).toEqual([{ id: "magia", nome: "Magia" }]);
     });
 
     it("conta os erros da pasta para o app avisar", async () => {
@@ -166,6 +182,28 @@ describe("servidor do app", () => {
       const pacote = readFileSync(join(story, "sessoes", id, "pacote.md"), "utf8");
       expect(pacote).not.toContain("id: ana-ferreira");
       expect(pacote).not.toContain("Aninha escondeu o mapa.");
+    });
+
+    it("aceita as referências escolhidas e o resumo mostra cada uma", async () => {
+      addReferencia();
+
+      const response = await postJson("/api/sessoes", {
+        capitulo: "cap-02",
+        plano: "Ana encontra o capitão no farol.",
+        referencias: ["magia"],
+      });
+      const body = await response.json();
+
+      expect(response.status).toBe(201);
+      expect(body.resumo).toMatch(/magia\s+forçada/);
+      expect(readFileSync(join(story, "sessoes", body.id, "pacote.md"), "utf8")).toContain("id: magia");
+    });
+
+    it("referência inexistente dá 400", async () => {
+      const response = await postJson("/api/sessoes", { capitulo: "cap-02", plano: "Plano.", referencias: ["nada"] });
+
+      expect(response.status).toBe(400);
+      expect((await response.json()).erro).toContain('"nada"');
     });
 
     it("capítulo inexistente dá 400 com a mensagem do lore-pack e não cria nada", async () => {

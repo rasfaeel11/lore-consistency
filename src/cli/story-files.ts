@@ -10,8 +10,8 @@ export function readText(path: string): string {
   return (text.startsWith("﻿") ? text.slice(1) : text).replace(/\r\n/g, "\n");
 }
 
-// Lê só o que a validação usa, em ordem alfabética: os .md da raiz, os .md dentro de fichas/,
-// os capítulos (capitulos/*.md) e o sessao.md de cada sessão.
+// Lê só o que a validação usa, em ordem alfabética: os .md da raiz, os .md dentro de fichas/
+// e de referencias/, os capítulos (capitulos/*.md) e o sessao.md de cada sessão.
 export function readStoryFiles(root: string): StoryFile[] {
   const files: StoryFile[] = [];
   for (const relative of readdirSync(root, { recursive: true, encoding: "utf8" })) {
@@ -31,6 +31,7 @@ function isStoryPath(path: string): boolean {
   return (
     isRootFile ||
     path.startsWith("fichas/") ||
+    path.startsWith("referencias/") ||
     chapterFileName(path) !== undefined ||
     sessionFolder(path) !== undefined
   );

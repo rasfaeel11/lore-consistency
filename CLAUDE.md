@@ -6,7 +6,7 @@ Ferramenta para quem escreve histórias com ajuda de IA. Organiza o mundo da his
 
 ## Status atual
 
-- Marco em andamento: **M4b** (terminal embutido)
+- Marco em andamento: **M4a.1** (referências, tipos novos, segredos, instruções para a IA)
 - Atualize esta linha ao fechar cada marco.
 
 ## Roteiro
@@ -18,6 +18,7 @@ Ferramenta para quem escreve histórias com ajuda de IA. Organiza o mundo da his
 | M2 | `pack` |
 | M3 | Sessões e capítulos |
 | M4a | App local: servidor, barra lateral, nova sessão |
+| M4a.1 | Referências por tema, tipos `povo` e `conceito`, regra de segredos no prompt, CLAUDE.md/AGENTS.md na pasta da história |
 | M4b | Terminal embutido |
 | M5 | `apply` (aprovação do fechamento) |
 | M6 | Publicação |
@@ -59,12 +60,22 @@ docs/
 Markdown com cabeçalho YAML, em `fichas/<tipo>/<id>.md`. Modelo em `templates/modelos/ficha-modelo.md`.
 
 - `id`: obrigatório, minúsculas sem acento, números e hífen, igual ao nome do arquivo sem `.md`, único na pasta inteira.
-- `tipo`: obrigatório, um de `personagem`, `lugar`, `faccao`, `objeto`.
+- `tipo`: obrigatório, um de `personagem`, `lugar`, `faccao`, `objeto`, `povo`, `conceito`. Pasta de cada um: `personagens`, `lugares`, `faccoes`, `objetos`, `povos`, `conceitos`.
 - `nome`: obrigatório, não vazio.
 - `aliases`: opcional, lista de textos (outros nomes, apelidos, títulos). Usado no M2 para achar a ficha numa cena.
 - `status`: opcional, texto.
 - `aparece_em`: opcional, lista de textos.
 - O corpo é livre (markdown).
+
+## Formato da referência
+
+Cânone organizado por tema (magia, combate, política...), em `referencias/<id>.md`. Markdown com cabeçalho YAML. Modelo em `templates/modelos/referencia-modelo.md`.
+
+- `id`: obrigatório, mesma regra das fichas. Único entre fichas e referências (o `--sem` vale para as duas).
+- `nome`: obrigatório, não vazio.
+- `palavras_chave`: opcional, lista de textos. O `check` avisa quando uma palavra-chave aparece em mais da metade das outras fichas e referências.
+- O corpo é livre e pode ser longo.
+- O `pack` inclui a referência quando uma palavra-chave aparece no plano da cena (mesma busca do `findMentions`) ou com `--ref id1,id2`. `--sem` também tira referências. A última cena **não** puxa referências. Entram no bloco `{{referencias}}`, depois das fichas.
 
 ## Capítulos e sessões
 

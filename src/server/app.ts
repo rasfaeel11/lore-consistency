@@ -4,7 +4,7 @@ import type { AddressInfo } from "node:net";
 import { basename, join } from "node:path";
 import { listChapters } from "../core/chapters.js";
 import { buildStartPrompt, isSessionId, listSessions, readSession } from "../core/session.js";
-import { validateStory } from "../core/validate.js";
+import { readReferencias, validateStory } from "../core/validate.js";
 import { readPackOptions } from "../cli/pack.js";
 import { WEB_DIR } from "../cli/paths.js";
 import { createSession } from "../cli/sessao.js";
@@ -93,8 +93,9 @@ function storySummary(root: string) {
     capitulos.push({ id: group.capitulo, titulo: "", sessoes: sessionsOf(group.capitulo) });
   }
 
+  const referencias = readReferencias(files).map((r) => ({ id: r.referencia.id, nome: r.referencia.nome }));
   const erros = validateStory(files).filter((problem) => problem.severity === "erro").length;
-  return { nome: basename(root), capitulos, erros };
+  return { nome: basename(root), capitulos, referencias, erros };
 }
 
 function getSession(root: string, id: string, res: ServerResponse): void {
@@ -147,6 +148,10 @@ async function postSession(root: string, req: IncomingMessage, res: ServerRespon
 
   const options = readPackOptions({
     com: typeof body.com === "string" ? [body.com] : undefined,
+    // As caixas de seleção chegam como lista de ids; o que não for texto é ignorado.
+    ref: Array.isArray(body.referencias)
+      ? body.referencias.filter((id): id is string => typeof id === "string")
+      : undefined,
     sem: typeof body.sem === "string" ? [body.sem] : undefined,
     alfabeto: body.alfabeto === true,
     "sem-ultima-cena": body.semUltimaCena === true,

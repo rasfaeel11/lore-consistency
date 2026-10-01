@@ -9,7 +9,7 @@ import {
   newSessionFile,
   nextSessionId,
 } from "../core/session.js";
-import { isFichaPath, validateStory } from "../core/validate.js";
+import { validateStory } from "../core/validate.js";
 import { formatReport } from "./check.js";
 import { PACK_OPTIONS, readPackOptions, writePack, type PackOptions } from "./pack.js";
 import { fail, ok, type CliResult } from "./result.js";
@@ -24,7 +24,7 @@ nova     cria sessoes/<id>/ com o sessao.md e o pacote.md, e mostra como iniciar
 listar   mostra os capítulos e as sessões de cada um, com o status
 fechar   marca a sessão como fechada e guarda o fechamento em sessoes/<id>/fechamento.md
 
-Opções do pack (para "nova"): --com, --sem, --alfabeto, --sem-ultima-cena, --limite.
+Opções do pack (para "nova"): --com, --ref, --sem, --alfabeto, --sem-ultima-cena, --limite.
 Veja "lore-pack pack --help".
 `;
 
@@ -113,8 +113,7 @@ export function createSession(request: NewSessionRequest): NewSessionResult {
   // Com erro na pasta, nem cria a sessão (o pack recusaria do mesmo jeito).
   const problems = validateStory(files);
   if (problems.some((problem) => problem.severity === "erro")) {
-    const fichaCount = files.filter((file) => isFichaPath(file.path)).length;
-    return { ok: false, error: `${formatReport(problems, fichaCount)}\nCorrija os erros acima antes de abrir uma sessão.` };
+    return { ok: false, error: `${formatReport(problems, files)}\nCorrija os erros acima antes de abrir uma sessão.` };
   }
 
   // Conta todas as pastas de sessoes/, mesmo as inválidas, para nunca reusar um nome.

@@ -94,3 +94,17 @@ Motivo: contar de verdade exigiria o tokenizador de cada IA (dependência nova e
 - **Página em HTML, CSS e JavaScript puro, em `web/`**, sem bundler e sem TypeScript no navegador. Compilar TS para o navegador pediria uma segunda configuração de build ou um bundler; para uma página pequena não compensa. Reavaliar no M4b se o xterm.js deixar o código do navegador maior. Todo texto da história entra com `textContent`, nunca como HTML.
 - **`createSession` saiu do `sessao nova`** para o app usar a mesma lógica. O `writePack` passou a receber o texto do plano (`plan`) em vez do caminho, porque no app o plano vem do formulário. A CLI lê o arquivo e passa o texto.
 - **O botão "Copiar pacote"** usa a área de transferência do navegador (princípio 9: sempre dá para só copiar). O `--copiar` da CLI continua no V2.
+
+## 2026-10-01: referências e tipos novos (M4a.1)
+
+- **Referências em `referencias/<id>.md`**, cabeçalho com `id`, `nome` e `palavras_chave`. O schema reaproveita os campos `id` e `nome` da ficha (`idField`, `nomeField`), para as mensagens de erro serem as mesmas.
+- **`palavras_chave` é opcional.** Sem ela, a referência só entra com `--ref`. Isso serve para cânone que você quer mandar só de vez em quando.
+- **O id é único entre fichas e referências**, porque o `--sem` vale para as duas e precisa saber o que tirar.
+- **Só o plano e o `--ref` puxam referências**, nunca a última cena. A cena anterior quase sempre cita algum termo do cânone; se ela puxasse referências, cada sessão herdaria as da anterior e o pacote cresceria sozinho.
+- **A busca é a mesma do `findMentions`** (palavra inteira, sem diferenciar maiúsculas e acentos). Para isso o `findMentions` virou um caso de uma função mais geral, `findTerms`, que recebe qualquer lista de termos. As referências são buscadas separadas das fichas: um termo de ficha não "esconde" uma palavra-chave mais curta de referência.
+- **Palavra-chave genérica:** aviso quando ela aparece (mesma busca) em mais da metade das *outras* fichas e referências, olhando o arquivo inteiro. A referência dona da palavra fica fora da conta, senão ela sempre contaria a si mesma. Exatamente metade não avisa.
+- **Pacote:** bloco `{{referencias}}` depois das fichas. Se o `00` do usuário for de uma versão antiga e não tiver esse marcador, as referências escolhidas ficam de fora e o resumo avisa como consertar, em vez de acrescentar o bloco sozinho (princípio 4).
+- **Resumo:** cada referência com motivo, palavras que casaram e tokens. A linha "Referências no pacote" só aparece se a pasta tiver alguma referência, para não poluir histórias que não usam. O `check` só conta referências quando elas existem, pelo mesmo motivo.
+- **`formatReport` recebe os arquivos** em vez do número de fichas, porque agora conta fichas e referências. Os três lugares que o chamam repetiam a contagem.
+- **App:** o formulário mostra uma caixa por referência (escondido se não houver nenhuma). As marcadas viram `--ref`; as que têm palavra-chave no plano entram sozinhas, igual na CLI.
+- **Tipos `povo` e `conceito`**, nas pastas `fichas/povos/` e `fichas/conceitos/`. "Conceito" cobre fenômenos, entidades cósmicas e eventos históricos: o que tem nome e aparece na cena, mas não é personagem, lugar, facção nem objeto.

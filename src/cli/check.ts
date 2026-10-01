@@ -1,6 +1,6 @@
 import { existsSync, statSync } from "node:fs";
 import { resolve } from "node:path";
-import { isFichaPath, validateStory, type Problem } from "../core/validate.js";
+import { isFichaPath, isReferenciaPath, validateStory, type Problem, type StoryFile } from "../core/validate.js";
 import { fail, type CliResult } from "./result.js";
 import { readStoryFiles } from "./story-files.js";
 
@@ -15,19 +15,23 @@ export function check(folder: string = "."): CliResult {
 
   const files = readStoryFiles(root);
   const problems = validateStory(files);
-  const fichaCount = files.filter((file) => isFichaPath(file.path)).length;
   const hasErrors = problems.some((problem) => problem.severity === "erro");
 
   return {
     exitCode: hasErrors ? 1 : 0,
-    stdout: formatReport(problems, fichaCount),
+    stdout: formatReport(problems, files),
     stderr: "",
   };
 }
 
 // Relatório agrupado por arquivo. O pack também usa, quando a validação falha.
-export function formatReport(problems: Problem[], fichaCount: number): string {
-  const validated = plural(fichaCount, "ficha validada", "fichas validadas");
+export function formatReport(problems: Problem[], files: StoryFile[]): string {
+  const fichaCount = files.filter((file) => isFichaPath(file.path)).length;
+  const refCount = files.filter((file) => isReferenciaPath(file.path)).length;
+  // As referências só aparecem na contagem quando existem, para não poluir pastas sem elas.
+  const validated =
+    plural(fichaCount, "ficha validada", "fichas validadas") +
+    (refCount > 0 ? `, ${plural(refCount, "referência validada", "referências validadas")}` : "");
   if (problems.length === 0) {
     return `Tudo certo: ${validated}.\n`;
   }

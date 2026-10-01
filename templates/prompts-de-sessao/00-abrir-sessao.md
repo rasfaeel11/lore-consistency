@@ -23,6 +23,9 @@ Antes de escrever qualquer coisa, responda em no máximo 8 linhas: onde estamos 
 === FICHAS DESTA SESSÃO ===
 {{fichas}}
 
+=== REFERÊNCIAS DESTA SESSÃO ===
+{{referencias}}
+
 === ALFABETO (só se for criar nomes) ===
 {{alfabeto}}
 

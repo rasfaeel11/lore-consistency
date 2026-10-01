@@ -14,6 +14,29 @@ describe("check", () => {
     expect(result.stdout).toContain("4 fichas validadas");
   });
 
+  it("aceita os tipos povo e conceito", () => {
+    const result = main(["check", fixture("valida-tipos-novos")], "0.0.0");
+
+    expect(result.stdout).toBe("Tudo certo: 2 fichas validadas.\n");
+    expect(result.exitCode).toBe(0);
+  });
+
+  it("conta as referências validadas", () => {
+    const historia = fileURLToPath(new URL("../fixtures/pack/referencias", import.meta.url));
+    const result = main(["check", historia], "0.0.0");
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toBe("Tudo certo: 1 ficha validada, 5 referências validadas.\n");
+  });
+
+  it("povo e conceito na pasta errada são avisados com a pasta certa", () => {
+    const result = main(["check", fixture("aviso-pasta-errada-povo-conceito")], "0.0.0");
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("fichas/povos/");
+    expect(result.stdout).toContain("fichas/conceitos/");
+  });
+
   // [fixture, arquivo esperado na saída, campo esperado na saída (ou null)]
   it.each([
     ["erro-sem-frontmatter", "fichas/personagens/ana-ferreira.md", null],
@@ -27,6 +50,7 @@ describe("check", () => {
     ["erro-sem-biblia", "biblia.md", null],
     ["erro-sem-estado", "estado.md", null],
     ["erro-sessao-invalida", "sessoes/2026-10-01-cap-01-01/sessao.md", "status"],
+    ["erro-referencia-invalida", "referencias/magia.md", "nome"],
   ])("%s sai com 1 e aponta o arquivo e o campo", (name, path, field) => {
     const result = main(["check", fixture(name)], "0.0.0");
 
@@ -39,6 +63,8 @@ describe("check", () => {
   it.each([
     ["aviso-nome-repetido", "fichas/personagens/lia-moraes.md", "aliases"],
     ["aviso-pasta-errada", "fichas/personagens/porto-velho.md", "tipo"],
+    ["aviso-pasta-errada-povo-conceito", "fichas/personagens/anoes.md", "tipo"],
+    ["aviso-palavra-chave-generica", "referencias/combate.md", "palavras_chave"],
   ])("%s sai com 0 mas mostra o aviso", (name, path, field) => {
     const result = main(["check", fixture(name)], "0.0.0");
 

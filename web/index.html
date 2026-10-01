@@ -34,6 +34,11 @@
             Plano da cena
             <textarea name="plano" rows="10" required placeholder="O que acontece na próxima cena? Cite os personagens e lugares pelo nome."></textarea>
           </label>
+          <fieldset id="campo-referencias" hidden>
+            <legend>Referências</legend>
+            <p class="dica">As que têm palavra-chave no plano já entram sozinhas. Marque as que devem entrar mesmo assim.</p>
+            <div id="lista-referencias"></div>
+          </fieldset>
           <details>
             <summary>Opções do pacote</summary>
             <label>
@@ -41,7 +46,7 @@
               <input name="com" type="text" placeholder="ana-ferreira, porto-sal" />
             </label>
             <label>
-              Tirar fichas (ids separados por vírgula)
+              Tirar fichas ou referências (ids separados por vírgula)
               <input name="sem" type="text" />
             </label>
             <label class="caixa"><input name="alfabeto" type="checkbox" /> Incluir o alfabeto (sessão que vai criar nomes)</label>

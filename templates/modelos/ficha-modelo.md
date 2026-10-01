@@ -1,6 +1,6 @@
 ---
 id: nome-em-minusculas-com-hifen
-tipo: personagem   # personagem | lugar | faccao | objeto
+tipo: personagem   # personagem | lugar | faccao | objeto | povo | conceito
 nome:
 aliases: []        # outros nomes, apelidos, títulos. Ex.: [o Capitão, Al]
 status:            # vivo, morto, desaparecido... (para lugares/objetos: existe, destruído...)

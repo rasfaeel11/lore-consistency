@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const TIPOS = ["personagem", "lugar", "faccao", "objeto"] as const;
+export const TIPOS = ["personagem", "lugar", "faccao", "objeto", "povo", "conceito"] as const;
 export type Tipo = (typeof TIPOS)[number];
 
 // Pasta esperada dentro de fichas/ para cada tipo.
@@ -9,6 +9,8 @@ export const FOLDER_BY_TIPO: Record<Tipo, string> = {
   lugar: "lugares",
   faccao: "faccoes",
   objeto: "objetos",
+  povo: "povos",
+  conceito: "conceitos",
 };
 
 // Letras minúsculas sem acento e números, em blocos separados por um hífen.
@@ -19,7 +21,8 @@ function missing(field: string): string {
 }
 
 // Campo opcional que é lista de textos. Ausente ou vazio ("aliases:") vira [].
-function optionalTextList(field: string) {
+// As referências também usam.
+export function optionalTextList(field: string) {
   return z
     .array(z.string({ error: `Cada item de "${field}" precisa ser um texto.` }), {
       error: `"${field}" precisa ser uma lista de textos, por exemplo: ${field}: [um, outro]`,
@@ -28,32 +31,37 @@ function optionalTextList(field: string) {
     .transform((value) => value ?? []);
 }
 
+// id e nome seguem a mesma regra nas fichas e nas referências.
+export const idField = z
+  .string({
+    error: (issue) => (issue.input === undefined ? missing("id") : '"id" precisa ser um texto.'),
+  })
+  .regex(ID_PATTERN, {
+    error: (issue) =>
+      `O id "${String(issue.input)}" é inválido. Use só letras minúsculas sem acento, números e hífen, por exemplo: ana-ferreira.`,
+  });
+
+export const nomeField = z
+  .string({
+    error: (issue) =>
+      issue.input === undefined
+        ? missing("nome")
+        : issue.input === null
+          ? '"nome" está vazio. Escreva o nome depois de "nome:".'
+          : '"nome" precisa ser um texto.',
+  })
+  .trim()
+  .min(1, { error: '"nome" está vazio. Escreva o nome depois de "nome:".' });
+
 export const fichaSchema = z.object({
-  id: z
-    .string({
-      error: (issue) => (issue.input === undefined ? missing("id") : '"id" precisa ser um texto.'),
-    })
-    .regex(ID_PATTERN, {
-      error: (issue) =>
-        `O id "${String(issue.input)}" é inválido. Use só letras minúsculas sem acento, números e hífen, por exemplo: ana-ferreira.`,
-    }),
+  id: idField,
   tipo: z.enum(TIPOS, {
     error: (issue) =>
       issue.input === undefined
         ? missing("tipo")
         : `O tipo "${String(issue.input)}" não existe. Use um de: ${TIPOS.join(", ")}.`,
   }),
-  nome: z
-    .string({
-      error: (issue) =>
-        issue.input === undefined
-          ? missing("nome")
-          : issue.input === null
-            ? '"nome" está vazio. Escreva o nome depois de "nome:".'
-            : '"nome" precisa ser um texto.',
-    })
-    .trim()
-    .min(1, { error: '"nome" está vazio. Escreva o nome depois de "nome:".' }),
+  nome: nomeField,
   aliases: optionalTextList("aliases"),
   status: z
     .string({ error: '"status" precisa ser um texto, por exemplo: status: vivo' })

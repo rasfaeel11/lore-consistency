@@ -22,13 +22,21 @@ type Match = {
 
 // Procura o nome e os aliases de cada ficha no texto, sem diferenciar maiúsculas e acentos.
 export function findMentions(text: string, fichas: Nameable[]): Mention[] {
+  return findTerms(
+    text,
+    fichas.map((ficha) => ({ id: ficha.id, terms: [ficha.nome, ...ficha.aliases] })),
+  );
+}
+
+// A mesma busca, para qualquer lista de termos (as referências usam as palavras-chave).
+export function findTerms(text: string, items: { id: string; terms: string[] }[]): Mention[] {
   const normalizedText = normalize(text);
 
   const matches: Match[] = [];
-  for (const ficha of fichas) {
-    for (const term of [ficha.nome, ...ficha.aliases]) {
+  for (const item of items) {
+    for (const term of item.terms) {
       for (const [start, end] of findTerm(normalizedText, term)) {
-        matches.push({ id: ficha.id, term, start, end });
+        matches.push({ id: item.id, term, start, end });
       }
     }
   }
@@ -39,12 +47,10 @@ export function findMentions(text: string, fichas: Nameable[]): Mention[] {
   );
 
   const mentions: Mention[] = [];
-  for (const ficha of fichas) {
-    const matched = [ficha.nome, ...ficha.aliases].filter((term) =>
-      kept.some((m) => m.id === ficha.id && m.term === term),
-    );
+  for (const item of items) {
+    const matched = item.terms.filter((term) => kept.some((m) => m.id === item.id && m.term === term));
     const unique = [...new Set(matched)];
-    if (unique.length > 0) mentions.push({ id: ficha.id, matched: unique });
+    if (unique.length > 0) mentions.push({ id: item.id, matched: unique });
   }
   return mentions;
 }

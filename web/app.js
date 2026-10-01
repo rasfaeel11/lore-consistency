@@ -3,7 +3,7 @@
 
 const $ = (id) => document.getElementById(id);
 
-let historia = { nome: "", capitulos: [], erros: 0 };
+let historia = { nome: "", capitulos: [], referencias: [], erros: 0 };
 // Resumo do pack logo depois de criar uma sessão, para mostrar uma vez.
 let ultimoResumo = null;
 
@@ -105,8 +105,28 @@ function mostrarNova() {
   }
   // Padrão: o último capítulo, que costuma ser o que está sendo escrito.
   select.value = escolhido || (select.options[select.options.length - 1]?.value ?? "");
+  desenharReferencias();
   $("erro-nova").hidden = true;
   mostrar("nova");
+}
+
+// Uma caixa de seleção por referência. Mantém marcadas as que já estavam.
+function desenharReferencias() {
+  const lista = $("lista-referencias");
+  const marcadas = new Set(new FormData($("form-nova")).getAll("referencias"));
+  lista.replaceChildren();
+  for (const referencia of historia.referencias ?? []) {
+    const rotulo = document.createElement("label");
+    rotulo.className = "caixa";
+    const caixa = document.createElement("input");
+    caixa.type = "checkbox";
+    caixa.name = "referencias";
+    caixa.value = referencia.id;
+    caixa.checked = marcadas.has(referencia.id);
+    rotulo.append(caixa, ` ${referencia.nome} (${referencia.id})`);
+    lista.append(rotulo);
+  }
+  $("campo-referencias").hidden = (historia.referencias ?? []).length === 0;
 }
 
 async function mostrarSessao(id) {
@@ -172,6 +192,7 @@ $("form-nova").addEventListener("submit", async (evento) => {
         capitulo: dados.get("capitulo"),
         plano: dados.get("plano"),
         com: dados.get("com"),
+        referencias: dados.getAll("referencias"),
         sem: dados.get("sem"),
         alfabeto: dados.get("alfabeto") === "on",
         semUltimaCena: dados.get("semUltimaCena") === "on",

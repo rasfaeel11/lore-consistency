@@ -1,7 +1,10 @@
+import type { z } from "zod";
 import { CHAPTER_ID, chapterFileName, listChapters } from "./chapters.js";
 import { FOLDER_BY_TIPO, fichaSchema, type Ficha } from "./ficha.js";
 import { splitFrontmatter } from "./frontmatter.js";
+import { findTerms } from "./mentions.js";
 import { normalize } from "./normalize.js";
+import { referenciaSchema, type Referencia } from "./referencia.js";
 import { sessionFolder, sessionSchema } from "./session.js";
 
 // Um arquivo da pasta da história, já lido. O caminho é relativo à pasta e usa "/".
@@ -24,6 +27,10 @@ const REQUIRED_ROOT_FILES = ["biblia.md", "estado.md"];
 
 export function isFichaPath(path: string): boolean {
   return path.startsWith("fichas/") && path.endsWith(".md");
+}
+
+export function isReferenciaPath(path: string): boolean {
+  return path.startsWith("referencias/") && path.endsWith(".md");
 }
 
 // Valida a pasta da história inteira e devolve a lista de problemas (vazia se estiver tudo certo).
@@ -50,9 +57,23 @@ export function validateStory(files: StoryFile[]): Problem[] {
     if (fichaProblems.ficha) valid.push({ path: file.path, ficha: fichaProblems.ficha });
   }
 
-  problems.push(...findDuplicateIds(valid));
+  const validRefs: { path: string; referencia: Referencia }[] = [];
+  for (const file of files.filter((f) => isReferenciaPath(f.path))) {
+    const refProblems = validateReferencia(file);
+    problems.push(...refProblems.problems);
+    if (refProblems.referencia) validRefs.push({ path: file.path, referencia: refProblems.referencia });
+  }
+
+  // O id é único entre fichas e referências, porque o --sem vale para as duas.
+  problems.push(
+    ...findDuplicateIds([
+      ...valid.map((v) => ({ path: v.path, id: v.ficha.id })),
+      ...validRefs.map((v) => ({ path: v.path, id: v.referencia.id })),
+    ]),
+  );
   problems.push(...findRepeatedNames(valid));
   problems.push(...findWrongFolders(valid));
+  problems.push(...findGenericKeywords(validRefs, files));
 
   problems.push(...validateChapterNames(files));
   const chapterIds = listChapters(files).map((chapter) => chapter.id);
@@ -80,14 +101,43 @@ export function readFichas(files: StoryFile[]): FichaFile[] {
   return fichas;
 }
 
+// Uma referência válida, com o arquivo de onde veio.
+export type ReferenciaFile = {
+  path: string;
+  content: string;
+  referencia: Referencia;
+};
+
+// Devolve as referências válidas da pasta. As com erro ficam de fora: rode validateStory antes.
+export function readReferencias(files: StoryFile[]): ReferenciaFile[] {
+  const referencias: ReferenciaFile[] = [];
+  for (const file of files.filter((f) => isReferenciaPath(f.path))) {
+    const { referencia } = validateReferencia(file);
+    if (referencia) referencias.push({ path: file.path, content: file.content, referencia });
+  }
+  return referencias;
+}
+
 function validateFicha(file: StoryFile): { problems: Problem[]; ficha?: Ficha } {
+  const { problems, data } = validateHeader(file, fichaSchema);
+  return { problems, ficha: data };
+}
+
+function validateReferencia(file: StoryFile): { problems: Problem[]; referencia?: Referencia } {
+  const { problems, data } = validateHeader(file, referenciaSchema);
+  return { problems, referencia: data };
+}
+
+// Valida o cabeçalho com o schema e confere se o id é igual ao nome do arquivo.
+// Só devolve os dados se não houver nenhum problema.
+function validateHeader<T>(file: StoryFile, schema: z.ZodType<T>): { problems: Problem[]; data?: T } {
   const split = splitFrontmatter(file.content);
   if (!split.ok) {
     return { problems: [error(file.path, null, split.error)] };
   }
 
   const problems: Problem[] = [];
-  const parsed = fichaSchema.safeParse(split.data);
+  const parsed = schema.safeParse(split.data);
   if (!parsed.success) {
     for (const issue of parsed.error.issues) {
       const field = issue.path.length > 0 ? String(issue.path[0]) : null;
@@ -109,7 +159,7 @@ function validateFicha(file: StoryFile): { problems: Problem[]; ficha?: Ficha } 
   }
 
   if (!parsed.success || problems.length > 0) return { problems };
-  return { problems, ficha: parsed.data };
+  return { problems, data: parsed.data };
 }
 
 function validateChapterNames(files: StoryFile[]): Problem[] {
@@ -167,18 +217,40 @@ function validateSession(file: StoryFile, chapterIds: string[]): Problem[] {
   return problems;
 }
 
-function findDuplicateIds(valid: { path: string; ficha: Ficha }[]): Problem[] {
+function findDuplicateIds(valid: { path: string; id: string }[]): Problem[] {
   const problems: Problem[] = [];
-  for (const { path, ficha } of valid) {
-    const others = valid.filter((v) => v.ficha.id === ficha.id && v.path !== path);
+  for (const { path, id } of valid) {
+    const others = valid.filter((v) => v.id === id && v.path !== path);
     if (others.length > 0) {
       problems.push(
         error(
           path,
           "id",
-          `O id "${ficha.id}" também é usado em ${others.map((o) => o.path).join(", ")}. Cada ficha precisa de um id único: mude um deles e renomeie o arquivo junto.`,
+          `O id "${id}" também é usado em ${others.map((o) => o.path).join(", ")}. Cada ficha e referência precisa de um id único: mude um deles e renomeie o arquivo junto.`,
         ),
       );
+    }
+  }
+  return problems;
+}
+
+// Palavra-chave que aparece em mais da metade das outras fichas e referências puxaria
+// a referência em quase toda sessão.
+function findGenericKeywords(validRefs: { path: string; referencia: Referencia }[], files: StoryFile[]): Problem[] {
+  const candidates = files.filter((f) => isFichaPath(f.path) || isReferenciaPath(f.path));
+  const problems: Problem[] = [];
+  for (const { path, referencia } of validRefs) {
+    const others = candidates.filter((f) => f.path !== path);
+    if (others.length === 0) continue;
+    for (const keyword of referencia.palavras_chave) {
+      const count = others.filter((f) => findTerms(f.content, [{ id: referencia.id, terms: [keyword] }]).length > 0).length;
+      if (count * 2 <= others.length) continue;
+      problems.push({
+        path,
+        field: "palavras_chave",
+        message: `A palavra-chave "${keyword}" aparece em ${count} de ${others.length} outras fichas e referências. Com ela, esta referência entraria em quase toda sessão. Troque por um termo mais específico.`,
+        severity: "aviso",
+      });
     }
   }
   return problems;

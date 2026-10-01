@@ -33,6 +33,8 @@ const FULL: PackSections = {
   biblia: "Regras do mundo.",
   estado: "Capítulo 2 em andamento.",
   fichas: "ficha da Ana",
+  // Sem marcador no TEMPLATE: conteúdo de seção sem marcador não entra no pacote.
+  referencias: "magia",
   alfabeto: "nomes",
   ultima_cena: "Ana olhou o mar.",
 };

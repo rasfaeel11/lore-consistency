@@ -11,9 +11,9 @@ import {
 } from "../core/pack.js";
 import { chapterForScene } from "../core/chapters.js";
 import { lastScene } from "../core/scene.js";
-import { selectFichas, type SelectedFicha } from "../core/select.js";
+import { selectFichas, selectReferencias, type SelectedFicha, type SelectedReferencia } from "../core/select.js";
 import { estimateTokens } from "../core/tokens.js";
-import { isFichaPath, readFichas, validateStory, type StoryFile } from "../core/validate.js";
+import { readFichas, readReferencias, validateStory, type StoryFile } from "../core/validate.js";
 import { formatReport } from "./check.js";
 import { TEMPLATES_DIR } from "./paths.js";
 import { fail, ok, type CliResult } from "./result.js";
@@ -23,12 +23,14 @@ const USAGE = `Uso:
   lore-pack pack --cena <plano.md> [opções] [pasta]
 
 Monta a mensagem de abertura da sessão: bíblia, estado, as fichas citadas no plano
-e na última cena, e a última cena. Grava num arquivo para você colar em qualquer IA.
+e na última cena, as referências cujas palavras-chave estão no plano, e a última cena.
+Grava num arquivo para você colar em qualquer IA.
 
 Opções:
   --cena <arquivo>     plano da próxima cena (obrigatório)
   --com <ids>          inclui fichas mesmo sem citação (separe com vírgula)
-  --sem <ids>          tira fichas do pacote (separe com vírgula)
+  --ref <ids>          inclui referências mesmo sem palavra-chave no plano (separe com vírgula)
+  --sem <ids>          tira fichas e referências do pacote (separe com vírgula)
   --alfabeto           inclui o alfabeto.md (para sessões que vão criar nomes)
   --sem-ultima-cena    não inclui a última cena
   --limite <tokens>    avisa se o pacote passar desse número de tokens
@@ -42,6 +44,7 @@ const SECTION_LABELS: Record<keyof PackSections, string> = {
   biblia: "bíblia",
   estado: "estado",
   fichas: "fichas",
+  referencias: "referências",
   alfabeto: "alfabeto",
   ultima_cena: "última cena",
 };
@@ -49,6 +52,7 @@ const SECTION_LABELS: Record<keyof PackSections, string> = {
 // Opções que o pack e o "sessao nova" têm em comum.
 export const PACK_OPTIONS = {
   com: { type: "string", multiple: true },
+  ref: { type: "string", multiple: true },
   sem: { type: "string", multiple: true },
   alfabeto: { type: "boolean" },
   "sem-ultima-cena": { type: "boolean" },
@@ -57,6 +61,7 @@ export const PACK_OPTIONS = {
 
 type PackOptionValues = {
   com?: string[];
+  ref?: string[];
   sem?: string[];
   alfabeto?: boolean;
   "sem-ultima-cena"?: boolean;
@@ -65,6 +70,7 @@ type PackOptionValues = {
 
 export type PackOptions = {
   include: string[];
+  includeRefs: string[];
   exclude: string[];
   alfabeto: boolean;
   omitScene: boolean;
@@ -93,6 +99,7 @@ export function readPackOptions(values: PackOptionValues): { ok: true; options: 
     ok: true,
     options: {
       include: splitIds(values.com),
+      includeRefs: splitIds(values.ref),
       exclude: splitIds(values.sem),
       alfabeto: Boolean(values.alfabeto),
       omitScene: Boolean(values["sem-ultima-cena"]),
@@ -157,10 +164,7 @@ export function writePack(request: PackRequest): CliResult {
   const files = readStoryFiles(root);
   const problems = validateStory(files);
   if (problems.some((problem) => problem.severity === "erro")) {
-    const fichaCount = files.filter((file) => isFichaPath(file.path)).length;
-    return fail(
-      `${formatReport(problems, fichaCount)}\nCorrija os erros acima antes de montar o pacote.`,
-    );
+    return fail(`${formatReport(problems, files)}\nCorrija os erros acima antes de montar o pacote.`);
   }
   const warningCount = problems.length;
 
@@ -169,14 +173,30 @@ export function writePack(request: PackRequest): CliResult {
   const scene = chapter ? lastScene(findFile(files, chapter)?.content ?? "") : "";
 
   const fichaFiles = readFichas(files);
+  const refFiles = readReferencias(files);
   const selection = selectFichas({
     fichas: fichaFiles.map((f) => f.ficha),
     plan: request.plan,
     lastScene: scene,
     include: request.include,
     exclude: request.exclude,
+    referenciaIds: refFiles.map((r) => r.referencia.id),
   });
-  if (!selection.ok) return fail(selection.errors.join("\n"));
+  // A última cena não entra aqui: referências só vêm do plano ou do --ref.
+  const refSelection = selectReferencias({
+    referencias: refFiles.map((r) => r.referencia),
+    plan: request.plan,
+    include: request.includeRefs,
+    exclude: request.exclude,
+  });
+  const selectErrors = [...(selection.ok ? [] : selection.errors), ...(refSelection.ok ? [] : refSelection.errors)];
+  if (!selection.ok || !refSelection.ok) return fail(selectErrors.join("\n"));
+
+  // Conteúdo de cada referência escolhida, para o pacote e para os tokens do resumo.
+  const refContents = refSelection.selected.map((s) => ({
+    ...s,
+    content: refFiles.find((r) => r.referencia.id === s.id)?.content.trim() ?? "",
+  }));
 
   let alfabeto = "";
   if (request.alfabeto) {
@@ -194,6 +214,7 @@ export function writePack(request: PackRequest): CliResult {
     fichas: selection.selected
       .map((s) => fichaFiles.find((f) => f.ficha.id === s.id)?.content.trim() ?? "")
       .join("\n\n"),
+    referencias: refContents.map((r) => r.content).join("\n\n"),
     alfabeto,
     ultima_cena: scene,
   };
@@ -219,6 +240,11 @@ export function writePack(request: PackRequest): CliResult {
       `O seu ${TEMPLATE_PATH} não existe ou não tem os marcadores {{...}} (pode ter sido criado por uma versão antiga). Usei o modelo padrão. Para personalizar, copie o modelo novo de ${join(TEMPLATES_DIR, TEMPLATE_PATH)}.`,
     );
   }
+  if (refContents.length > 0 && !template.text.includes("{{referencias}}")) {
+    warnings.push(
+      `O seu ${TEMPLATE_PATH} não tem o marcador {{referencias}}, então as referências acima ficaram fora do pacote. Acrescente o bloco "=== REFERÊNCIAS DESTA SESSÃO ===" do modelo novo (${join(TEMPLATES_DIR, TEMPLATE_PATH)}).`,
+    );
+  }
   if (warningCount > 0) {
     warnings.push(
       `As fichas têm ${warningCount === 1 ? "1 aviso" : `${warningCount} avisos`}. Rode "lore-pack check" para ver.`,
@@ -229,6 +255,8 @@ export function writePack(request: PackRequest): CliResult {
     formatSummary({
       output,
       selected: selection.selected,
+      referencias: refContents.map((r) => ({ ...r, tokens: estimateTokens(r.content) })),
+      hasReferencias: refFiles.length > 0,
       chapter,
       sceneOmitted: request.omitScene,
       sections,
@@ -265,6 +293,8 @@ function findFile(files: StoryFile[], path: string): StoryFile | undefined {
 type SummaryInput = {
   output: string;
   selected: SelectedFicha[];
+  referencias: (SelectedReferencia & { tokens: number })[];
+  hasReferencias: boolean;
   chapter: string | undefined;
   sceneOmitted: boolean;
   sections: PackSections;
@@ -290,6 +320,25 @@ function formatSummary(input: SummaryInput): string {
     });
   }
 
+  if (input.referencias.length === 0) {
+    // Pasta sem nenhuma referência: nem menciona, para não poluir histórias que não usam.
+    if (input.hasReferencias) lines.push("Referências no pacote: nenhuma. Cite uma palavra-chave no plano, ou use --ref.");
+  } else {
+    lines.push(`Referências no pacote (${input.referencias.length}):`);
+    const idWidth = Math.max(...input.referencias.map((r) => r.id.length));
+    const reasons = input.referencias.map((r) => r.reasons.join(", "));
+    const reasonWidth = Math.max(...reasons.map((r) => r.length));
+    const matches = input.referencias.map((r) =>
+      r.matched.length > 0 ? `casou: ${r.matched.map((m) => `"${m}"`).join(", ")}` : "",
+    );
+    const matchWidth = Math.max(...matches.map((m) => m.length));
+    input.referencias.forEach((r, i) => {
+      lines.push(
+        `  ${r.id.padEnd(idWidth)}  ${(reasons[i] ?? "").padEnd(reasonWidth)}  ${(matches[i] ?? "").padEnd(matchWidth)}  ~${formatNumber(r.tokens)} tokens`,
+      );
+    });
+  }
+
   if (input.sceneOmitted) lines.push("Última cena: omitida (--sem-ultima-cena)");
   else if (input.chapter) lines.push(`Última cena: ${input.chapter}`);
   else lines.push("Última cena: nenhum capítulo com texto em capitulos/");
@@ -311,7 +360,7 @@ function formatSummary(input: SummaryInput): string {
       "",
       "!!! ATENÇÃO !!!",
       `O pacote (~${formatNumber(input.total)} tokens) passa do limite de ${formatNumber(input.limit)}.`,
-      `A maior seção é "${largest.label}" (~${formatNumber(largest.tokens)} tokens). Considere compactá-la (prompt 07-compactar) ou tirar fichas com --sem.`,
+      `A maior seção é "${largest.label}" (~${formatNumber(largest.tokens)} tokens). Considere compactá-la (prompt 07-compactar) ou tirar fichas ou referências com --sem.`,
     );
   }
 
