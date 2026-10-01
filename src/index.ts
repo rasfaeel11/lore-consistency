@@ -8,8 +8,14 @@ const { version } = JSON.parse(readFileSync(packageJsonUrl, "utf8")) as {
   version: string;
 };
 
-const result = main(process.argv.slice(2), version);
-
-if (result.stdout) process.stdout.write(result.stdout);
-if (result.stderr) process.stderr.write(result.stderr);
-process.exitCode = result.exitCode;
+try {
+  const result = main(process.argv.slice(2), version);
+  if (result.stdout) process.stdout.write(result.stdout);
+  if (result.stderr) process.stderr.write(result.stderr);
+  process.exitCode = result.exitCode;
+} catch (error) {
+  // Falha inesperada (ex.: sem permissão para escrever na pasta): mensagem curta, sem stack trace.
+  const message = error instanceof Error ? error.message : String(error);
+  process.stderr.write(`Erro inesperado: ${message}\n`);
+  process.exitCode = 1;
+}

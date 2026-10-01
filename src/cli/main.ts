@@ -1,21 +1,17 @@
 import { parseArgs } from "node:util";
-
-// Resultado de uma execução da CLI. Quem imprime e encerra o processo é o index.ts.
-export type CliResult = {
-  exitCode: number;
-  stdout: string;
-  stderr: string;
-};
+import { check } from "./check.js";
+import { init } from "./init.js";
+import { fail, ok, type CliResult } from "./result.js";
 
 const HELP = `lore-pack: organiza o mundo da sua história e monta o pacote de contexto para a IA.
 
 Uso:
   lore-pack <comando> [opções]
 
-Comandos (ainda em construção):
-  init     cria a pasta da história a partir dos modelos
-  check    valida as fichas
-  pack     monta o pacote de contexto de uma cena
+Comandos:
+  init <pasta>     cria a pasta da história a partir dos modelos
+  check [pasta]    valida as fichas (padrão: a pasta atual)
+  pack             monta o pacote de contexto de uma cena (em breve)
 
 Opções:
   -h, --help       mostra esta ajuda
@@ -43,21 +39,20 @@ export function main(args: string[], version: string): CliResult {
     return ok(`${version}\n`);
   }
 
-  const command = parsed.positionals[0];
+  const [command, ...rest] = parsed.positionals;
 
   if (parsed.values.help || command === undefined) {
     return ok(HELP);
   }
 
-  return fail(
-    `Comando desconhecido: "${command}".\nRode "lore-pack --help" para ver os comandos.`,
-  );
-}
-
-function ok(stdout: string): CliResult {
-  return { exitCode: 0, stdout, stderr: "" };
-}
-
-function fail(message: string): CliResult {
-  return { exitCode: 1, stdout: "", stderr: `${message}\n` };
+  switch (command) {
+    case "init":
+      return init(rest[0]);
+    case "check":
+      return check(rest[0]);
+    default:
+      return fail(
+        `Comando desconhecido: "${command}".\nRode "lore-pack --help" para ver os comandos.`,
+      );
+  }
 }

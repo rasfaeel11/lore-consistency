@@ -6,7 +6,7 @@ Ferramenta para quem escreve histórias com ajuda de IA. Organiza o mundo da his
 
 ## Status atual
 
-- Marco em andamento: **M0** (esqueleto do projeto)
+- Marco em andamento: **M2** (`pack`)
 - Atualize esta linha ao fechar cada marco.
 
 ## Roteiro
@@ -53,7 +53,7 @@ docs/
 
 Markdown com cabeçalho YAML, em `fichas/<tipo>/<id>.md`. Modelo em `templates/modelos/ficha-modelo.md`.
 
-- `id`: obrigatório, minúsculas e hífen, igual ao nome do arquivo sem `.md`, único na pasta inteira.
+- `id`: obrigatório, minúsculas sem acento, números e hífen, igual ao nome do arquivo sem `.md`, único na pasta inteira.
 - `tipo`: obrigatório, um de `personagem`, `lugar`, `faccao`, `objeto`.
 - `nome`: obrigatório, não vazio.
 - `aliases`: opcional, lista de textos (outros nomes, apelidos, títulos). Usado no M2 para achar a ficha numa cena.
