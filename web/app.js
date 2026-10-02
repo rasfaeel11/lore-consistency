@@ -7,8 +7,15 @@ let historia = { nome: "", capitulos: [], referencias: [], erros: 0 };
 // Resumo do pack logo depois de criar uma sessão, para mostrar uma vez.
 let ultimoResumo = null;
 
+// O token vem no endereço que o "lore-pack ui" imprimiu. Vai no cabeçalho de todo pedido à API.
+const TOKEN = new URLSearchParams(location.search).get("token") ?? "";
+
+function pedir(caminho, opcoes = {}) {
+  return fetch(caminho, { ...opcoes, headers: { ...opcoes.headers, "X-Lore-Pack-Token": TOKEN } });
+}
+
 async function api(caminho, opcoes) {
-  const resposta = await fetch(caminho, opcoes);
+  const resposta = await pedir(caminho, opcoes);
   const dados = await resposta.json();
   if (!resposta.ok) throw new Error(dados.erro ?? `Erro ${resposta.status}`);
   return dados;
@@ -149,11 +156,131 @@ async function mostrarSessao(id) {
   $("copiar-pacote").disabled = sessao.pacote === null;
   $("copiado").textContent = sessao.pacote === null ? "Esta sessão não tem pacote.md." : "";
 
+  limparGuarda();
+  mostrarConfirmacaoApagar(false);
+  $("apagar-status").textContent = "";
+
   const resumo = $("sessao-resumo-pack");
   resumo.hidden = ultimoResumo === null || ultimoResumo.id !== id;
   resumo.textContent = ultimoResumo?.texto ?? "";
   mostrar("sessao");
+  // Depois de mostrar: o terminal só sabe o próprio tamanho quando está visível.
+  await mostrarTerminais(id);
 }
+
+// --- Guarda do cânone ---
+
+function limparGuarda() {
+  $("guarda-status").textContent = "";
+  $("guarda-alerta").hidden = true;
+  $("vigiar").hidden = true;
+  mostrarConfirmacao(false);
+}
+
+function mostrarConfirmacao(sim) {
+  $("reverter").hidden = sim;
+  $("manter").hidden = sim;
+  $("confirmar-reverter").hidden = !sim;
+  $("cancelar-reverter").hidden = !sim;
+}
+
+async function verificarGuarda() {
+  const id = rotaAtual().id;
+  limparGuarda();
+  let guarda;
+  try {
+    guarda = await api(`/api/sessoes/${encodeURIComponent(id)}/guarda`);
+  } catch (erro) {
+    $("guarda-status").textContent = erro.message;
+    return;
+  }
+
+  if (!guarda.vigiada) {
+    $("guarda-status").textContent =
+      "Esta sessão não tem snapshot (foi criada antes da guarda do cânone). Clique em \"Começar a vigiar\" para comparar a partir de agora.";
+    $("vigiar").hidden = false;
+    return;
+  }
+  const desde = new Date(guarda.desde).toLocaleString("pt-BR");
+  if (guarda.mudancas.length === 0) {
+    $("guarda-status").textContent = `Nenhum arquivo protegido mudou desde ${desde}.`;
+    return;
+  }
+
+  const quantos = guarda.mudancas.length === 1 ? "1 arquivo protegido mudou" : `${guarda.mudancas.length} arquivos protegidos mudaram`;
+  $("guarda-titulo").textContent = `Atenção: ${quantos} desde ${desde}, fora do fechamento da sessão.`;
+  $("confirmar-reverter").textContent = `Confirmar: voltar ${guarda.mudancas.length === 1 ? "o arquivo" : `os ${guarda.mudancas.length} arquivos`} ao snapshot`;
+
+  const lista = $("guarda-lista");
+  lista.replaceChildren();
+  for (const mudanca of guarda.mudancas) {
+    const titulo = document.createElement("h4");
+    titulo.textContent = `${mudanca.tipo}: ${mudanca.arquivo}`;
+    const diff = document.createElement("pre");
+    diff.className = "diff";
+    for (const linha of mudanca.diff.split("\n")) {
+      const span = document.createElement("span");
+      if (linha.startsWith("+ ")) span.className = "entrou";
+      if (linha.startsWith("- ")) span.className = "saiu";
+      span.textContent = `${linha}\n`;
+      diff.append(span);
+    }
+    lista.append(titulo, diff);
+  }
+  $("guarda-alerta").hidden = false;
+}
+
+async function acaoGuarda(acao, mensagem) {
+  const id = rotaAtual().id;
+  try {
+    const resposta = await api(`/api/sessoes/${encodeURIComponent(id)}/guarda/${acao}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    await verificarGuarda();
+    $("guarda-status").textContent = mensagem(resposta);
+  } catch (erro) {
+    $("guarda-status").textContent = erro.message;
+  }
+}
+
+$("verificar").addEventListener("click", verificarGuarda);
+$("vigiar").addEventListener("click", () =>
+  acaoGuarda("vigiar", () => "Snapshot tirado. A partir de agora, mudanças nos arquivos protegidos serão acusadas."),
+);
+$("reverter").addEventListener("click", () => mostrarConfirmacao(true));
+$("cancelar-reverter").addEventListener("click", () => mostrarConfirmacao(false));
+$("confirmar-reverter").addEventListener("click", () =>
+  acaoGuarda("reverter", (r) => `Revertido: ${r.arquivos.map((a) => a.arquivo).join(", ")}.`),
+);
+$("manter").addEventListener("click", () =>
+  acaoGuarda("manter", (r) => `Mantido e registrado em alteracoes-diretas.md: ${r.arquivos.map((a) => a.arquivo).join(", ")}.`),
+);
+
+// --- Apagar sessão (segundo clique confirma) ---
+
+function mostrarConfirmacaoApagar(sim) {
+  $("apagar").hidden = sim;
+  $("confirmar-apagar").hidden = !sim;
+  $("cancelar-apagar").hidden = !sim;
+}
+
+$("apagar").addEventListener("click", () => mostrarConfirmacaoApagar(true));
+$("cancelar-apagar").addEventListener("click", () => mostrarConfirmacaoApagar(false));
+$("confirmar-apagar").addEventListener("click", async () => {
+  const id = rotaAtual().id;
+  try {
+    await api(`/api/sessoes/${encodeURIComponent(id)}`, { method: "DELETE" });
+  } catch (erro) {
+    mostrarConfirmacaoApagar(false);
+    $("apagar-status").textContent = erro.message;
+    return;
+  }
+  await carregarHistoria();
+  location.hash = "";
+  $("inicio").querySelector("p").textContent = `Sessão ${id} apagada.`;
+});
 
 async function copiar(texto, mensagem) {
   try {
@@ -170,7 +297,7 @@ $("copiar-comando").addEventListener("click", () => copiar($("sessao-comando").t
 
 $("copiar-pacote").addEventListener("click", async () => {
   const id = rotaAtual().id;
-  const resposta = await fetch(`/api/sessoes/${encodeURIComponent(id)}/pacote`);
+  const resposta = await pedir(`/api/sessoes/${encodeURIComponent(id)}/pacote`);
   if (!resposta.ok) {
     $("copiado").textContent = "Não achei o pacote.md desta sessão.";
     return;
@@ -205,6 +332,219 @@ $("form-nova").addEventListener("submit", async (evento) => {
   } catch (erro) {
     $("erro-nova").textContent = erro.message;
     $("erro-nova").hidden = false;
+  } finally {
+    botao.disabled = false;
+  }
+});
+
+// --- Terminal embutido ---
+// Um objeto por terminal aberto (de qualquer sessão). Trocar de sessão só esconde a tela;
+// o programa continua rodando no servidor. Recarregar a página reanexa pela lista do servidor.
+const terminais = new Map();
+let terminalAtivo = null;
+let modulosXterm = null;
+
+// O xterm só é baixado quando a sessão é aberta: quem não usa o terminal não paga por ele.
+function carregarXterm() {
+  modulosXterm ??= Promise.all([import("/vendor/xterm.mjs"), import("/vendor/addon-fit.mjs")]).then(
+    ([xterm, fit]) => ({ Terminal: xterm.Terminal, FitAddon: fit.FitAddon }),
+  );
+  return modulosXterm;
+}
+
+function avisoTerminal(texto) {
+  $("terminal-aviso").textContent = texto ?? "";
+  $("terminal-aviso").hidden = !texto;
+}
+
+async function mostrarTerminais(sessaoId) {
+  avisoTerminal(null);
+  let estado;
+  try {
+    estado = await api("/api/terminal");
+  } catch (erro) {
+    estado = { ligado: false, motivo: erro.message };
+  }
+  // Desligado (config "nenhum", comando não instalado, node-pty ausente): o motivo fica na tela.
+  $("abrir-terminal").disabled = !estado.ligado;
+  if (!estado.ligado) avisoTerminal(estado.motivo);
+
+  try {
+    for (const t of await api("/api/terminais")) {
+      if (!terminais.has(t.id)) await criarTerminal(t.id, t.sessao);
+    }
+  } catch (erro) {
+    avisoTerminal(`Não consegui mostrar os terminais: ${erro.message}`);
+  }
+  desenharAbas(sessaoId);
+}
+
+async function criarTerminal(id, sessao) {
+  const { Terminal, FitAddon } = await carregarXterm();
+  const el = document.createElement("div");
+  el.className = "terminal";
+  el.hidden = true;
+  $("terminais").append(el);
+
+  const term = new Terminal({
+    cursorBlink: true,
+    fontFamily: "ui-monospace, Consolas, 'Cascadia Mono', monospace",
+    fontSize: 14,
+    theme: { background: "#1c1b18" },
+  });
+  const fit = new FitAddon();
+  term.loadAddon(fit);
+  term.open(el);
+
+  const t = { id, sessao, term, fit, el, ws: null, rodando: true, codigo: null, desconectado: false };
+  terminais.set(id, t);
+  term.onData((dados) => enviar(t, { tipo: "entrada", dados }));
+  term.onResize(({ cols, rows }) => enviar(t, { tipo: "tamanho", colunas: cols, linhas: rows }));
+  term.attachCustomKeyEventHandler((evento) => teclaEspecial(t, evento));
+  conectar(t);
+  return t;
+}
+
+function conectar(t) {
+  const protocolo = location.protocol === "https:" ? "wss" : "ws";
+  // O navegador não deixa pôr cabeçalho em WebSocket: o token vai na URL.
+  const ws = new WebSocket(`${protocolo}://${location.host}/ws/terminais/${t.id}?token=${encodeURIComponent(TOKEN)}`);
+  t.ws = ws;
+  ws.addEventListener("open", () => ajustar(t));
+  ws.addEventListener("message", (evento) => {
+    const mensagem = JSON.parse(evento.data);
+    if (mensagem.tipo === "saida") t.term.write(mensagem.dados);
+    if (mensagem.tipo === "fim") {
+      t.rodando = false;
+      t.codigo = mensagem.codigo;
+      t.term.write(`\r\n\x1b[2m[programa encerrado, código ${mensagem.codigo}]\x1b[0m\r\n`);
+      desenharAbas(rotaAtual().id);
+    }
+    // A guarda comparou quando o programa terminou: se algo mudou, mostra o aviso da sessão.
+    if (mensagem.tipo === "guarda" && mensagem.mudancas.length > 0 && rotaAtual().id === t.sessao) verificarGuarda();
+  });
+  ws.addEventListener("close", () => {
+    if (t.rodando && terminais.has(t.id)) {
+      t.desconectado = true;
+      desenharAbas(rotaAtual().id);
+    }
+  });
+}
+
+function enviar(t, mensagem) {
+  if (t.ws?.readyState === WebSocket.OPEN) t.ws.send(JSON.stringify(mensagem));
+}
+
+// Ajusta o terminal ao espaço da tela e avisa o programa do novo tamanho.
+function ajustar(t) {
+  if (t.el.hidden) return;
+  t.fit.fit();
+  enviar(t, { tipo: "tamanho", colunas: t.term.cols, linhas: t.term.rows });
+}
+
+window.addEventListener("resize", () => {
+  const ativo = terminais.get(terminalAtivo);
+  if (ativo) ajustar(ativo);
+});
+
+// Ctrl+C com texto selecionado copia; sem seleção, vai para o programa (interromper).
+// Ctrl+V fica com o navegador, que cola, e o xterm manda o texto colado para o programa.
+function teclaEspecial(t, evento) {
+  if (evento.type !== "keydown" || !(evento.ctrlKey || evento.metaKey)) return true;
+  const tecla = evento.key.toLowerCase();
+  if (tecla === "c" && t.term.hasSelection()) {
+    navigator.clipboard.writeText(t.term.getSelection()).catch(() => {});
+    t.term.clearSelection();
+    return false;
+  }
+  if (tecla === "v") return false;
+  return true;
+}
+
+function desenharAbas(sessaoId) {
+  const daSessao = [...terminais.values()].filter((t) => t.sessao === sessaoId);
+  if (!daSessao.some((t) => t.id === terminalAtivo)) terminalAtivo = daSessao.at(-1)?.id ?? null;
+  for (const t of terminais.values()) t.el.hidden = t.id !== terminalAtivo;
+
+  const abas = $("abas-terminal");
+  abas.replaceChildren();
+  daSessao.forEach((t, indice) => {
+    const aba = document.createElement("div");
+    aba.className = t.rodando ? "aba" : "aba encerrado";
+    aba.setAttribute("role", "tab");
+    aba.setAttribute("aria-selected", String(t.id === terminalAtivo));
+
+    const nome = document.createElement("button");
+    nome.type = "button";
+    const estado = document.createElement("span");
+    estado.className = "estado";
+    estado.textContent = !t.rodando
+      ? ` · encerrado (código ${t.codigo})`
+      : t.desconectado
+        ? " · desconectado"
+        : " · rodando";
+    nome.append(`Terminal ${indice + 1}`, estado);
+    nome.addEventListener("click", () => {
+      terminalAtivo = t.id;
+      desenharAbas(sessaoId);
+      t.term.focus();
+    });
+
+    const fechar = document.createElement("button");
+    fechar.type = "button";
+    fechar.className = "fechar";
+    fechar.textContent = "×";
+    fechar.title = t.rodando ? "Fechar: encerra o programa" : "Fechar";
+    fechar.addEventListener("click", () => {
+      // Com o programa rodando, fechar encerra a conversa com a IA: pede um segundo clique.
+      if (t.rodando && fechar.textContent === "×") {
+        fechar.textContent = "encerrar?";
+        setTimeout(() => (fechar.textContent = "×"), 3000);
+        return;
+      }
+      fecharTerminal(t);
+    });
+
+    aba.append(nome, fechar);
+    abas.append(aba);
+  });
+
+  const ativo = terminais.get(terminalAtivo);
+  if (ativo) requestAnimationFrame(() => ajustar(ativo));
+}
+
+async function fecharTerminal(t) {
+  try {
+    await api(`/api/terminais/${t.id}`, { method: "DELETE" });
+  } catch {
+    // O servidor já não tinha esse terminal: só tira da tela.
+  }
+  t.ws?.close();
+  t.term.dispose();
+  t.el.remove();
+  terminais.delete(t.id);
+  if (terminalAtivo === t.id) terminalAtivo = null;
+  desenharAbas(rotaAtual().id);
+}
+
+$("abrir-terminal").addEventListener("click", async () => {
+  const sessaoId = rotaAtual().id;
+  const botao = $("abrir-terminal");
+  botao.disabled = true;
+  avisoTerminal(null);
+  try {
+    // Só o id da sessão: qual programa roda é decidido pelo lore-pack.config.json, no servidor.
+    const { id } = await api(`/api/sessoes/${encodeURIComponent(sessaoId)}/terminais`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    const t = await criarTerminal(id, sessaoId);
+    terminalAtivo = id;
+    desenharAbas(sessaoId);
+    t.term.focus();
+  } catch (erro) {
+    avisoTerminal(erro.message);
   } finally {
     botao.disabled = false;
   }

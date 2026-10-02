@@ -42,6 +42,12 @@ describe("pack", () => {
     expect(readNormalized(output)).toBe(readNormalized(fixture("pack/completa-esperado.md")));
   });
 
+  it("fora de uma sessão, o pacote não tem o bloco de arquivos da sessão", () => {
+    pack();
+
+    expect(readNormalized(output)).not.toContain("ARQUIVOS DESTA SESSÃO");
+  });
+
   it("o resumo explica por que cada ficha entrou e mostra tokens por seção", () => {
     const { stdout } = pack();
 

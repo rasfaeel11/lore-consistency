@@ -1,4 +1,4 @@
-import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { request, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -9,6 +9,16 @@ import { createAppServer, listen } from "../../src/server/app.js";
 
 const HISTORIA = fileURLToPath(new URL("../fixtures/sessoes/historia", import.meta.url));
 const OPEN = "2026-09-30-cap-02-02";
+const TOKEN = "token-de-teste";
+
+// Todo pedido dos testes leva o token no cabeçalho, como a página faz.
+// Os testes que querem ver a recusa usam globalThis.fetch direto.
+function fetch(url: string, init: RequestInit = {}) {
+  return globalThis.fetch(url, {
+    ...init,
+    headers: { "X-Lore-Pack-Token": TOKEN, ...(init.headers as Record<string, string> | undefined) },
+  });
+}
 
 describe("servidor do app", () => {
   let tempDir: string;
@@ -20,7 +30,7 @@ describe("servidor do app", () => {
     tempDir = mkdtempSync(join(tmpdir(), "lore-pack-"));
     story = join(tempDir, "historia");
     cpSync(HISTORIA, story, { recursive: true });
-    server = createAppServer(story);
+    server = createAppServer(story, TOKEN);
     base = await listen(server, 0);
   });
 
@@ -52,7 +62,7 @@ describe("servidor do app", () => {
   // O fetch não deixa trocar o Host; o http.request deixa.
   function rawGet(path: string, headers: Record<string, string>): Promise<number> {
     return new Promise((resolve, reject) => {
-      const req = request({ host: "127.0.0.1", port: port(), path, headers }, (res) => {
+      const req = request({ host: "127.0.0.1", port: port(), path, headers: { "X-Lore-Pack-Token": TOKEN, ...headers } }, (res) => {
         res.resume();
         resolve(res.statusCode ?? 0);
       });
@@ -67,7 +77,7 @@ describe("servidor do app", () => {
   });
 
   it("serve a página, o script e o estilo", async () => {
-    const page = await fetch(`${base}/`);
+    const page = await fetch(`${base}/?token=${TOKEN}`);
     expect(page.status).toBe(200);
     expect(page.headers.get("content-type")).toContain("text/html");
     expect(await page.text()).toContain("lore-pack");
@@ -76,9 +86,49 @@ describe("servidor do app", () => {
     expect((await fetch(`${base}/style.css`)).headers.get("content-type")).toContain("text/css");
   });
 
+  it("serve os arquivos do xterm direto do node_modules, sem token", async () => {
+    const script = await globalThis.fetch(`${base}/vendor/xterm.mjs`);
+    expect(script.status).toBe(200);
+    expect(script.headers.get("content-type")).toContain("javascript");
+    expect(await script.text()).toContain("Terminal");
+
+    const fit = await globalThis.fetch(`${base}/vendor/addon-fit.mjs`);
+    expect(fit.status).toBe(200);
+    expect(await fit.text()).toContain("FitAddon");
+
+    expect((await globalThis.fetch(`${base}/vendor/xterm.css`)).headers.get("content-type")).toContain("text/css");
+    expect((await globalThis.fetch(`${base}/vendor/../package.json`)).status).toBe(404);
+  });
+
   it("caminho desconhecido dá 404", async () => {
     expect((await fetch(`${base}/../package.json`)).status).toBe(404);
     expect((await fetch(`${base}/api/nada`)).status).toBe(404);
+  });
+
+  describe("token", () => {
+    it("a página sem token, ou com token errado, dá 401", async () => {
+      const semToken = await globalThis.fetch(`${base}/`);
+      expect(semToken.status).toBe(401);
+      expect(await semToken.text()).toContain("lore-pack ui");
+
+      expect((await globalThis.fetch(`${base}/?token=errado`)).status).toBe(401);
+    });
+
+    it("o script e o estilo não precisam de token (não têm dado da história)", async () => {
+      expect((await globalThis.fetch(`${base}/app.js`)).status).toBe(200);
+      expect((await globalThis.fetch(`${base}/style.css`)).status).toBe(200);
+    });
+
+    it("a API sem o cabeçalho do token dá 401", async () => {
+      const response = await globalThis.fetch(`${base}/api/historia`);
+
+      expect(response.status).toBe(401);
+      expect((await response.json()).erro).toContain("lore-pack ui");
+    });
+
+    it("token na URL não vale para a API (só o cabeçalho)", async () => {
+      expect((await globalThis.fetch(`${base}/api/historia?token=${TOKEN}`)).status).toBe(401);
+    });
   });
 
   describe("GET /api/historia", () => {
@@ -127,7 +177,7 @@ describe("servidor do app", () => {
       expect(response.status).toBe(200);
       expect(body).toMatchObject({ id: OPEN, capitulo: "cap-02", status: "aberta" });
       expect(body.corpo).toContain("## Plano");
-      expect(body.comando).toBe(`claude "Leia o arquivo sessoes/${OPEN}/pacote.md e siga as instruções dele."`);
+      expect(body.comando).toBe(`claude "Leia o arquivo sessoes/${OPEN}/pacote.md e siga as instruções dele. Escreva o texto das cenas em sessoes/${OPEN}/rascunho.md e, ao final, as propostas de mudança em sessoes/${OPEN}/fechamento.md. Não edite nenhum outro arquivo."`);
     });
 
     it("sessão inexistente ou id inválido dá 404 com mensagem", async () => {
@@ -231,6 +281,112 @@ describe("servidor do app", () => {
       });
 
       expect(response.status).toBe(400);
+    });
+  });
+
+  describe("guarda do cânone", () => {
+    const ESTADO = () => join(story, "estado.md");
+
+    it("sessão sem snapshot: vigiada false; vigiar tira o snapshot", async () => {
+      const before = await (await fetch(`${base}/api/sessoes/${OPEN}/guarda`)).json();
+      expect(before).toEqual({ vigiada: false, mudancas: [] });
+
+      const response = await postJson(`/api/sessoes/${OPEN}/guarda/vigiar`, {});
+      expect(response.status).toBe(200);
+
+      const after = await (await fetch(`${base}/api/sessoes/${OPEN}/guarda`)).json();
+      expect(after.vigiada).toBe(true);
+      expect(after.desde).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    });
+
+    it("sessão criada pelo app já nasce vigiada e acusa a mudança com o diff", async () => {
+      const { id } = await (await postJson("/api/sessoes", { capitulo: "cap-02", plano: "Ana no farol." })).json();
+      writeFileSync(ESTADO(), "Mudado pela IA.\n");
+
+      const body = await (await fetch(`${base}/api/sessoes/${id}/guarda`)).json();
+
+      expect(body.vigiada).toBe(true);
+      expect(body.mudancas).toEqual([
+        { arquivo: "estado.md", tipo: "alterado", diff: expect.stringContaining("+ Mudado pela IA.") },
+      ]);
+    });
+
+    it("reverter restaura e manter registra", async () => {
+      await postJson(`/api/sessoes/${OPEN}/guarda/vigiar`, {});
+      const original = readFileSync(ESTADO(), "utf8");
+      writeFileSync(ESTADO(), "x");
+
+      const reverted = await (await postJson(`/api/sessoes/${OPEN}/guarda/reverter`, {})).json();
+      expect(reverted.arquivos).toEqual([{ arquivo: "estado.md", tipo: "alterado" }]);
+      expect(readFileSync(ESTADO(), "utf8")).toBe(original);
+
+      writeFileSync(ESTADO(), "y");
+      const kept = await (await postJson(`/api/sessoes/${OPEN}/guarda/manter`, {})).json();
+      expect(kept.arquivos).toEqual([{ arquivo: "estado.md", tipo: "alterado" }]);
+      expect(readFileSync(join(story, "sessoes", OPEN, "alteracoes-diretas.md"), "utf8")).toContain("estado.md");
+    });
+
+    it("reverter sem snapshot dá 409", async () => {
+      const response = await postJson(`/api/sessoes/${OPEN}/guarda/reverter`, {});
+
+      expect(response.status).toBe(409);
+      expect((await response.json()).erro).toContain("snapshot");
+    });
+
+    it("ações da guarda só aceitam POST em JSON", async () => {
+      await postJson(`/api/sessoes/${OPEN}/guarda/vigiar`, {});
+      writeFileSync(ESTADO(), "x");
+
+      const response = await fetch(`${base}/api/sessoes/${OPEN}/guarda/reverter`, { method: "POST" });
+
+      expect(response.status).toBe(415);
+      expect(readFileSync(ESTADO(), "utf8")).toBe("x");
+    });
+  });
+
+  describe("DELETE /api/sessoes/:id", () => {
+    it("apaga a pasta da sessão e o snapshot, e ela some da lista", async () => {
+      const { id } = await (await postJson("/api/sessoes", { capitulo: "cap-02", plano: "Ana no farol." })).json();
+      expect(existsSync(join(story, ".lore-pack", "snapshots", id))).toBe(true);
+
+      const response = await fetch(`${base}/api/sessoes/${id}`, { method: "DELETE" });
+
+      expect(response.status).toBe(200);
+      expect(existsSync(join(story, "sessoes", id))).toBe(false);
+      expect(existsSync(join(story, ".lore-pack", "snapshots", id))).toBe(false);
+      const historia = await (await fetch(`${base}/api/historia`)).json();
+      expect(JSON.stringify(historia)).not.toContain(id);
+    });
+
+    it("apaga sessão fechada e sessão sem snapshot", async () => {
+      const closed = "2026-09-28-cap-02-01";
+
+      expect((await fetch(`${base}/api/sessoes/${closed}`, { method: "DELETE" })).status).toBe(200);
+      expect((await fetch(`${base}/api/sessoes/${OPEN}`, { method: "DELETE" })).status).toBe(200);
+      expect(existsSync(join(story, "sessoes", closed))).toBe(false);
+      expect(existsSync(join(story, "sessoes", OPEN))).toBe(false);
+    });
+
+    it("recusa com 409 se a guarda tiver mudança não resolvida, e não apaga nada", async () => {
+      await postJson(`/api/sessoes/${OPEN}/guarda/vigiar`, {});
+      writeFileSync(join(story, "estado.md"), "Mudado pela IA.\n");
+
+      const response = await fetch(`${base}/api/sessoes/${OPEN}`, { method: "DELETE" });
+
+      expect(response.status).toBe(409);
+      expect((await response.json()).erro).toContain("estado.md");
+      expect(existsSync(join(story, "sessoes", OPEN, "sessao.md"))).toBe(true);
+    });
+
+    it("sessão inexistente ou id inválido dá 404 e não apaga nada", async () => {
+      expect((await fetch(`${base}/api/sessoes/2026-01-01-cap-01-01`, { method: "DELETE" })).status).toBe(404);
+      expect((await fetch(`${base}/api/sessoes/..%2F..%2Fsessoes`, { method: "DELETE" })).status).toBe(404);
+      expect(existsSync(join(story, "sessoes", OPEN))).toBe(true);
+    });
+
+    it("sem token dá 401 e não apaga", async () => {
+      expect((await globalThis.fetch(`${base}/api/sessoes/${OPEN}`, { method: "DELETE" })).status).toBe(401);
+      expect(existsSync(join(story, "sessoes", OPEN))).toBe(true);
     });
   });
 

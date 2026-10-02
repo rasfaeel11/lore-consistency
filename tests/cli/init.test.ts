@@ -1,8 +1,9 @@
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { main } from "../../src/cli/main.js";
+import { parseTerminalConfig } from "../../src/core/terminal-config.js";
 
 describe("init", () => {
   let tempDir: string;
@@ -32,6 +33,24 @@ describe("init", () => {
     expect(existsSync(join(target, "fichas", "conceitos"))).toBe(true);
     expect(existsSync(join(target, "modelos", "referencia-modelo.md"))).toBe(true);
     expect(result.stdout).toContain("check");
+  });
+
+  it("o prompt 00 diz à IA para não revelar os segredos", () => {
+    const target = join(tempDir, "minha-historia");
+    main(["init", target], "0.0.0");
+
+    const abrir = readFileSync(join(target, "prompts-de-sessao", "00-abrir-sessao.md"), "utf8");
+    expect(abrir).toContain(
+      "As seções de Segredos das fichas e das referências servem para manter a coerência. Nunca revele o conteúdo delas no texto da história sem eu pedir; pode insinuar se eu orientar.",
+    );
+  });
+
+  it("cria o lore-pack.config.json com o terminal padrão (claude com o prompt)", () => {
+    const target = join(tempDir, "minha-historia");
+    main(["init", target], "0.0.0");
+
+    const parsed = parseTerminalConfig(readFileSync(join(target, "lore-pack.config.json"), "utf8"));
+    expect(parsed).toEqual({ ok: true, terminal: { comando: "claude", args: ["{{prompt}}"] } });
   });
 
   it("aceita uma pasta que já existe mas está vazia", () => {

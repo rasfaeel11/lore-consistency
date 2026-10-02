@@ -6,7 +6,7 @@ Ferramenta para quem escreve histórias com ajuda de IA. Organiza o mundo da his
 
 ## Status atual
 
-- Marco em andamento: **M4a.1** (referências, tipos novos, segredos, instruções para a IA)
+- Marco em andamento: **M5** (`apply`: aprovação do fechamento)
 - Atualize esta linha ao fechar cada marco.
 
 ## Roteiro
@@ -18,7 +18,7 @@ Ferramenta para quem escreve histórias com ajuda de IA. Organiza o mundo da his
 | M2 | `pack` |
 | M3 | Sessões e capítulos |
 | M4a | App local: servidor, barra lateral, nova sessão |
-| M4a.1 | Referências por tema, tipos `povo` e `conceito`, regra de segredos no prompt, CLAUDE.md/AGENTS.md na pasta da história |
+| M4a.1 | Referências por tema, tipos `povo` e `conceito`, regra de segredos no prompt |
 | M4b | Terminal embutido |
 | M5 | `apply` (aprovação do fechamento) |
 | M6 | Publicação |
@@ -41,17 +41,20 @@ Fora do escopo até a v1: chamar API de IA, contas de usuário, hospedagem onlin
 
 ```
 src/
-  core/        # funções puras: schemas da ficha e da sessão, validação, montagem do pacote, capítulos e sessões
-  cli/         # comandos: init, check, pack, capitulo, sessao, app. Lê e escreve arquivos.
-  server/      # servidor do app local (node:http, só 127.0.0.1). Usa o núcleo e as funções da CLI.
+  core/        # funções puras: schemas da ficha e da sessão, validação, montagem do pacote, capítulos, sessões e guarda do cânone
+  cli/         # comandos (lista única em commands.ts): init, check, pack, capitulo, sessao, ui. Lê e escreve arquivos.
+  server/      # servidor do app local (node:http + ws, só 127.0.0.1) e terminal embutido (node-pty opcional). Usa o núcleo e as funções da CLI.
   index.ts     # ponto de entrada da CLI
 web/           # página do app: HTML, CSS e JS puro, servidos pelo server/
 templates/     # o que o `init` copia para a pasta da história
+instrucoes/    # texto do CLAUDE.md/AGENTS.md e o .claude/settings.json que o `init` grava na história
+scripts/       # scripts do build: limpar o dist/ e conferir o build (verify:dist)
 tests/
   fixtures/    # pastas de história de teste (válidas e inválidas)
 docs/
   DECISOES.md  # diário de decisões
   V2.md        # ideias adiadas
+  CHECKLIST-M4b.md # teste manual do terminal e da guarda com o Claude Code de verdade
   prompts-dev/ # prompts para construir o projeto com o Claude Code (não são do produto)
 ```
 
@@ -80,7 +83,8 @@ Cânone organizado por tema (magia, combate, política...), em `referencias/<id>
 ## Capítulos e sessões
 
 - Capítulo: `capitulos/cap-NN.md`. Título = primeiro cabeçalho `# `; sem ele, o nome do arquivo.
-- Sessão: pasta `sessoes/<id>/` com `sessao.md`, `pacote.md` e, depois de fechada, `fechamento.md`. Id `data-capítulo-sequência` (`2026-10-01-cap-03-01`), igual ao nome da pasta.
+- Sessão: pasta `sessoes/<id>/` com `sessao.md`, `pacote.md` e, depois de fechada, `fechamento.md`. Id `data-capítulo-sequência` (`2026-10-01-cap-03-01`), igual ao nome da pasta. Se o autor mantiver alterações diretas em arquivos protegidos, elas ficam registradas em `alteracoes-diretas.md`.
+- Guarda do cânone: ao criar a sessão, o lore-pack copia os arquivos protegidos (`biblia.md`, `estado.md`, `alfabeto.md`, `fichas/`, `referencias/`, `capitulos/`, mais `CLAUDE.md`, `AGENTS.md`, `.claude/settings.json` e `lore-pack.config.json`) para `.lore-pack/snapshots/<id>/`, pasta fora do git e ignorada pelo `check`. `sessao verificar` e o app comparam com o snapshot; `sessao fechar` recusa enquanto houver mudança não resolvida. É detecção depois do fato, não bloqueio.
 - Cabeçalho do `sessao.md`: `id`, `capitulo` (precisa existir em `capitulos/`), `criada_em` (ISO), `status` (`aberta` | `fechada`), `fechada_em` (obrigatório se fechada). Corpo: `## Plano` e, depois de fechada, `## Resumo` opcional.
 
 ## Stack e convenções
@@ -108,3 +112,4 @@ Estou reaprendendo TypeScript depois de um tempo parado e quero aprender enquant
 - **Não invente APIs nem flags.** Se depender de detalhe que pode ter mudado, confira na documentação.
 - Quando houver decisão relevante, registre direto em `docs/DECISOES.md` e me comunique. Não espere aprovação.
 - Sempre mande um commit depois de um prompt;
+- Sempre me diga o que testar depois de cada Prompt;

@@ -1,5 +1,6 @@
 import { cpSync, existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import { basename, resolve } from "node:path";
+import { writeInstructions } from "./instrucoes.js";
 import { TEMPLATES_DIR } from "./paths.js";
 import { fail, ok, type CliResult } from "./result.js";
 
@@ -27,6 +28,7 @@ export function init(folder: string | undefined): CliResult {
     recursive: true,
     filter: (source) => basename(source) !== ".gitkeep",
   });
+  writeInstructions(target);
 
   return ok(`História criada em ${target}
 
@@ -36,5 +38,6 @@ Próximos passos:
   3. Rode "lore-pack check ${folder}" para validar as fichas.
 
 O COMO-USAR.md explica o ritual de cada sessão de escrita.
+O CLAUDE.md e o AGENTS.md dizem à IA o que ela pode e não pode mexer nesta pasta.
 `);
 }

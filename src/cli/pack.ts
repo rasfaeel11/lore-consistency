@@ -11,6 +11,7 @@ import {
 } from "../core/pack.js";
 import { chapterForScene } from "../core/chapters.js";
 import { lastScene } from "../core/scene.js";
+import { buildSessionFilesBlock } from "../core/session.js";
 import { selectFichas, selectReferencias, type SelectedFicha, type SelectedReferencia } from "../core/select.js";
 import { estimateTokens } from "../core/tokens.js";
 import { readFichas, readReferencias, validateStory, type StoryFile } from "../core/validate.js";
@@ -84,6 +85,8 @@ export type PackRequest = PackOptions & {
   output: string;
   // Capítulo de onde sai a última cena. Sem ele, o mais recente que tenha texto.
   chapter?: string;
+  // Pacote de uma sessão: ganha no fim o bloco que diz em quais arquivos a IA pode escrever.
+  sessionId?: string;
 };
 
 // Converte as opções comuns. Só o --limite pode estar errado.
@@ -218,7 +221,9 @@ export function writePack(request: PackRequest): CliResult {
     alfabeto,
     ultima_cena: scene,
   };
-  const content = `${PACK_MARK}\n${buildPack(template.text, sections)}`;
+  const message = buildPack(template.text, sections);
+  const sessionBlock = request.sessionId ? `\n${buildSessionFilesBlock(request.sessionId)}` : "";
+  const content = `${PACK_MARK}\n${message}${sessionBlock}`;
 
   // Princípio 4: só sobrescreve arquivo que o próprio pack gerou.
   const output = request.output;

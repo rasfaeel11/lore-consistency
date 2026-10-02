@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { splitFrontmatter } from "../../src/core/frontmatter.js";
 import {
   buildStartPrompt,
+  buildSessionFilesBlock,
   closeSession,
   isSessionId,
   listSessions,
@@ -167,10 +168,28 @@ describe("closeSession", () => {
 });
 
 describe("buildStartPrompt", () => {
-  it("pede para a IA ler o pacote e seguir as instruções", () => {
-    expect(buildStartPrompt("sessoes/2026-10-01-cap-03-01/pacote.md")).toBe(
-      "Leia o arquivo sessoes/2026-10-01-cap-03-01/pacote.md e siga as instruções dele.",
+  it("pede para ler o pacote, escrever só no rascunho e no fechamento da sessão", () => {
+    expect(buildStartPrompt("2026-10-01-cap-03-01")).toBe(
+      "Leia o arquivo sessoes/2026-10-01-cap-03-01/pacote.md e siga as instruções dele. Escreva o texto das cenas em sessoes/2026-10-01-cap-03-01/rascunho.md e, ao final, as propostas de mudança em sessoes/2026-10-01-cap-03-01/fechamento.md. Não edite nenhum outro arquivo.",
     );
+  });
+
+  it("cabe numa linha e não tem aspas (vai como argumento do comando)", () => {
+    const prompt = buildStartPrompt("2026-10-01-cap-03-01");
+    expect(prompt).not.toMatch(/["\n]/);
+  });
+});
+
+describe("buildSessionFilesBlock", () => {
+  it("diz onde escrever e proíbe editar o resto, só para quem tem acesso aos arquivos", () => {
+    const block = buildSessionFilesBlock("2026-10-01-cap-03-01");
+
+    expect(block.split("\n")[0]).toBe("=== ARQUIVOS DESTA SESSÃO ===");
+    expect(block).toContain("Se você consegue ler e escrever arquivos nesta pasta");
+    expect(block).toContain("sessoes/2026-10-01-cap-03-01/rascunho.md");
+    expect(block).toContain("sessoes/2026-10-01-cap-03-01/fechamento.md");
+    expect(block).toContain("prompts-de-sessao/04-fechar-sessao.md");
+    expect(block).toContain("Não edite nenhum outro arquivo");
   });
 });
 

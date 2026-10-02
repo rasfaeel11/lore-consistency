@@ -2,15 +2,26 @@ import { copyFileSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "nod
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { listChapters } from "../core/chapters.js";
+import type { Change } from "../core/guard.js";
 import {
   buildStartPrompt,
   closeSession,
+  isSessionId,
   listSessions,
   newSessionFile,
   nextSessionId,
 } from "../core/session.js";
 import { validateStory } from "../core/validate.js";
 import { formatReport } from "./check.js";
+import {
+  checkGuard,
+  formatGuardReport,
+  hasSnapshot,
+  keepChanges,
+  removeSnapshot,
+  revertChanges,
+  takeSnapshot,
+} from "./guard.js";
 import { PACK_OPTIONS, readPackOptions, writePack, type PackOptions } from "./pack.js";
 import { fail, ok, type CliResult } from "./result.js";
 import { findStoryRoot, isDirectory, isFile, readStoryFiles, readText } from "./story-files.js";
@@ -19,10 +30,15 @@ const USAGE = `Uso:
   lore-pack sessao nova --capitulo <cap-NN> --plano <plano.md> [opções do pack] [pasta]
   lore-pack sessao listar [pasta]
   lore-pack sessao fechar <id> [--fechamento <arquivo.md>] [--resumo "<texto>"] [pasta]
+  lore-pack sessao verificar <id> [--reverter | --manter | --vigiar] [pasta]
 
 nova     cria sessoes/<id>/ com o sessao.md e o pacote.md, e mostra como iniciar a IA
 listar   mostra os capítulos e as sessões de cada um, com o status
 fechar   marca a sessão como fechada e guarda o fechamento em sessoes/<id>/fechamento.md
+verificar  guarda do cânone: mostra o que mudou na bíblia, estado, alfabeto, fichas,
+           referências e capítulos desde que a sessão foi criada
+           --reverter  volta tudo ao snapshot   --manter  registra e aceita as mudanças
+           --vigiar    tira um snapshot novo (para sessões criadas antes da guarda)
 
 Opções do pack (para "nova"): --com, --ref, --sem, --alfabeto, --sem-ultima-cena, --limite.
 Veja "lore-pack pack --help".
@@ -37,6 +53,8 @@ export function sessao(args: string[]): CliResult {
       return listCommand(rest);
     case "fechar":
       return closeCommand(rest);
+    case "verificar":
+      return verifyCommand(rest);
     case undefined:
     case "-h":
     case "--help":
@@ -82,7 +100,7 @@ function newSession(args: string[]): CliResult {
 ${created.summary}
 Para começar no Claude Code, abra o terminal na pasta da história e rode:
   cd "${root}"
-  claude "${buildStartPrompt(packPath)}"
+  claude "${buildStartPrompt(created.id)}"
 
 Com outra IA, cole o conteúdo de ${packPath} na conversa.
 `);
@@ -125,12 +143,14 @@ export function createSession(request: NewSessionRequest): NewSessionResult {
 
   mkdirSync(folder, { recursive: true });
   writeFileSync(join(folder, "sessao.md"), newSessionFile({ id, capitulo, criada_em: now.toISOString(), plano: request.plan }));
-  const packResult = writePack({ ...request, output: join(folder, "pacote.md"), chapter: capitulo });
+  const packResult = writePack({ ...request, output: join(folder, "pacote.md"), chapter: capitulo, sessionId: id });
   if (packResult.exitCode !== 0) {
     // A pasta acabou de ser criada por nós: apagar não perde nada do usuário.
     rmSync(folder, { recursive: true, force: true });
     return { ok: false, error: packResult.stderr.trimEnd() };
   }
+  // Guarda do cânone: a partir daqui, mudanças nos arquivos protegidos são acusadas.
+  takeSnapshot(root, id, now);
   return { ok: true, id, summary: packResult.stdout };
 }
 
@@ -203,6 +223,12 @@ function closeCommand(args: string[]): CliResult {
     return fail(`Já existe sessoes/${id}/fechamento.md. Para não apagar esse texto, nada foi alterado.`);
   }
 
+  // Guarda do cânone: não fecha com alteração direta não resolvida.
+  const guard = checkGuard(story.root, id);
+  if (guard && guard.changes.length > 0) {
+    return fail(`${formatGuardReport(guard, id)}\nResolva as alterações acima antes de fechar a sessão. Nada foi alterado.`);
+  }
+
   const closed = closeSession(readText(sessionPath), new Date().toISOString(), parsed.values.resumo);
   if (!closed.ok) return fail(`sessoes/${id}/sessao.md: ${closed.error}`);
 
@@ -212,8 +238,90 @@ function closeCommand(args: string[]): CliResult {
     copyFileSync(closingSource, closingTarget);
     lines.push(`Fechamento copiado para sessoes/${id}/fechamento.md.`);
   }
+  lines.push(
+    guard
+      ? "Guarda do cânone: nenhum arquivo protegido mudou durante a sessão."
+      : "Guarda do cânone: sessão sem snapshot (criada antes da guarda), nada foi verificado.",
+  );
   lines.push("Aplicar as mudanças do fechamento nas fichas e no estado.md ainda é manual.");
   return ok(`${lines.join("\n")}\n`);
+}
+
+export type DeleteSessionResult =
+  | { ok: true }
+  | { ok: false; reason: "nao-existe" | "guarda"; error: string };
+
+// Apaga sessoes/<id>/ e o snapshot da sessão. Quem chama já confirmou com o autor (princípio 4).
+// Recusa se a guarda tiver mudança não resolvida: sem o snapshot, ela deixaria de ser acusada.
+export function deleteSession(root: string, id: string): DeleteSessionResult {
+  const folder = join(root, "sessoes", id);
+  if (!isSessionId(id) || !isFile(join(folder, "sessao.md"))) {
+    return { ok: false, reason: "nao-existe", error: `A sessão "${id}" não existe em sessoes/.` };
+  }
+  const guard = checkGuard(root, id);
+  if (guard && guard.changes.length > 0) {
+    const files = guard.changes.map((change) => change.path).join(", ");
+    return {
+      ok: false,
+      reason: "guarda",
+      error: `Arquivos protegidos mudaram durante esta sessão (${files}). Reverta ou mantenha as alterações antes de apagar a sessão. Nada foi apagado.`,
+    };
+  }
+  rmSync(folder, { recursive: true, force: true });
+  removeSnapshot(root, id);
+  return { ok: true };
+}
+
+function verifyCommand(args: string[]): CliResult {
+  let parsed;
+  try {
+    parsed = parseArgs({
+      args,
+      options: { reverter: { type: "boolean" }, manter: { type: "boolean" }, vigiar: { type: "boolean" } },
+      allowPositionals: true,
+    });
+  } catch (error) {
+    return argsError(error);
+  }
+  const [id, folder = "."] = parsed.positionals;
+  if (!id) return fail(`Informe o id da sessão, por exemplo: lore-pack sessao verificar 2026-10-01-cap-03-01`);
+  const { reverter, manter, vigiar } = parsed.values;
+  if ([reverter, manter, vigiar].filter(Boolean).length > 1) {
+    return fail(`Use só uma de --reverter, --manter e --vigiar.`);
+  }
+
+  const story = findStoryRoot(folder);
+  if (!story.ok) return fail(story.error);
+  const { root } = story;
+  if (!isSessionId(id) || !isFile(join(root, "sessoes", id, "sessao.md"))) {
+    return fail(`A sessão "${id}" não existe em sessoes/. Rode "lore-pack sessao listar" para ver os ids.`);
+  }
+
+  if (vigiar) {
+    const since = takeSnapshot(root, id);
+    return ok(`Snapshot tirado em ${since}. A partir de agora, mudanças nos arquivos protegidos serão acusadas.\n`);
+  }
+  if (!hasSnapshot(root, id)) {
+    return ok(
+      `A sessão ${id} não tem snapshot (foi criada antes da guarda do cânone), então não há com o que comparar.\nPara começar a vigiar a partir de agora: lore-pack sessao verificar ${id} --vigiar\n`,
+    );
+  }
+
+  const list = (changes: Change[]) => changes.map((c) => `  ${c.kind}: ${c.path}`).join("\n");
+  // Rodar com --reverter ou --manter conta como a confirmação do princípio 4.
+  if (reverter) {
+    const reverted = revertChanges(root, id);
+    if (reverted.length === 0) return ok(`Nada para reverter: nenhum arquivo protegido mudou.\n`);
+    return ok(`Revertido para o snapshot:\n${list(reverted)}\n`);
+  }
+  if (manter) {
+    const kept = keepChanges(root, id);
+    if (kept.length === 0) return ok(`Nada para manter: nenhum arquivo protegido mudou.\n`);
+    return ok(`Mudanças mantidas e registradas em sessoes/${id}/alteracoes-diretas.md:\n${list(kept)}\n`);
+  }
+
+  const report = checkGuard(root, id);
+  return ok(report ? formatGuardReport(report, id) : "");
 }
 
 function argsError(error: unknown): CliResult {

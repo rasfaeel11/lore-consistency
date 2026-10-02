@@ -108,3 +108,154 @@ Motivo: contar de verdade exigiria o tokenizador de cada IA (dependência nova e
 - **`formatReport` recebe os arquivos** em vez do número de fichas, porque agora conta fichas e referências. Os três lugares que o chamam repetiam a contagem.
 - **App:** o formulário mostra uma caixa por referência (escondido se não houver nenhuma). As marcadas viram `--ref`; as que têm palavra-chave no plano entram sozinhas, igual na CLI.
 - **Tipos `povo` e `conceito`**, nas pastas `fichas/povos/` e `fichas/conceitos/`. "Conceito" cobre fenômenos, entidades cósmicas e eventos históricos: o que tem nome e aparece na cena, mas não é personagem, lugar, facção nem objeto.
+
+## 2026-10-01: comando `app` renomeado para `ui`
+
+O "Comando desconhecido: ui" relatado no M4b não era registro nem build desatualizado: o comando do M4a se chamava `app`. Renomeado para `ui`, como no roteiro. A entrada do M4a acima fala em `app` porque registra o que foi decidido na época.
+
+O `npm test` passou a rodar `vitest run --dir tests`: havia um worktree em `.claude/worktrees/` e o Vitest rodava os testes dele junto.
+
+## 2026-10-01: guarda do cânone (M4b, parte 4)
+
+- **O que é protegido:** `biblia.md`, `estado.md`, `alfabeto.md` e tudo em `fichas/`, `referencias/` e `capitulos/`. Tudo em `sessoes/` fica livre, o que cobre as exceções `rascunho.md` e `fechamento.md`.
+- **Quando o snapshot é tirado:** ao criar a sessão (CLI e app). O roteiro pedia "ao abrir o terminal", mas o terminal (partes 2 e 3) ainda não existe. Quando existir, ele também vai tirar o snapshot. Sessões antigas podem começar a ser vigiadas com `sessao verificar <id> --vigiar` ou com o botão "Começar a vigiar".
+- **Formato:** `.lore-pack/snapshots/<id>/manifest.json` (data e sha256 de cada arquivo) mais a cópia byte a byte em `arquivos/`. A comparação usa o hash dos bytes, e o Reverter copia os bytes de volta, então nada muda, nem a quebra de linha. `.lore-pack/.gitignore` com `*` deixa a pasta fora do git sem mexer no `.gitignore` do autor.
+- **Quando compara:** no `sessao verificar`, no botão "Verificar alterações" e no `sessao fechar`, que recusa fechar com mudança não resolvida. Vai comparar também quando o terminal encerrar (parte 2).
+- **Reverter** volta tudo ao snapshot: restaura alterados e apagados, apaga criados. É tudo de uma vez, não arquivo por arquivo. No app, pede um segundo clique de confirmação. Na CLI, rodar com `--reverter` conta como a confirmação.
+- **Manter** acrescenta uma seção em `sessoes/<id>/alteracoes-diretas.md` e tira um snapshot novo, para a mesma mudança não ser acusada de novo.
+- **Diff sem dependência:** maior subsequência comum (LCS) linha a linha em `src/core/guard.ts`, com duas linhas de contexto. Antes de montar a tabela, corta o começo e o fim iguais, para um capítulo grande com poucas mudanças não pesar.
+- **Limite, dito com honestidade:** é detecção depois do fato, não bloqueio. Se a IA apagar ou reescrever um arquivo protegido, o autor descobre e pode reverter, mas a escrita já aconteceu. O bloqueio de verdade vem da validação do `apply` (M5). A IA também pode apagar o próprio `.lore-pack/`; nesse caso a sessão aparece como "sem snapshot".
+
+### Restringir a escrita no Claude Code (pesquisa da 4.5, ainda não aplicada)
+
+Pela documentação atual (code.claude.com/docs/en/permissions), dá para negar edição por caminho num `.claude/settings.json` da pasta da história. O caminho com `/` na frente é relativo à pasta do arquivo de configuração, e regra de `Write` é ignorada (o certo é `Edit`):
+
+```json
+{
+  "permissions": {
+    "deny": [
+      "Edit(/biblia.md)",
+      "Edit(/estado.md)",
+      "Edit(/alfabeto.md)",
+      "Edit(/fichas/**)",
+      "Edit(/referencias/**)",
+      "Edit(/capitulos/**)"
+    ]
+  }
+}
+```
+
+Limites, segundo a documentação: a regra vale para as ferramentas de arquivo, para comandos que o Claude Code reconhece no shell (`sed`, `tee`, redirecionamento `>`), mas não para um script que abre o arquivo sozinho (por exemplo, `node -e` ou `python`). Só a sandbox bloqueia isso no sistema operacional. A documentação não deixa claro se `deny` continua valendo no modo `bypassPermissions`. Vale só para o Claude Code; Gemini e ChatGPT não leem esse arquivo. Proposta: o `init` gera esse arquivo. Aguarda aprovação do autor.
+
+## 2026-10-02: correção do `ui`, token e build (M4b, parte 0)
+
+- **Diagnóstico do "Comando desconhecido: ui".** A causa foi a hipótese (a), com outro nome: o comando estava registrado como `app`, já corrigido no rename. Reproduzindo de novo com o `dist/` atual, o `ui` aparece e responde. Achei também um problema da hipótese (b): o `tsc` só escreve, nunca apaga, e o `dist/` do checkout principal ainda tinha o `dist/cli/app.js` do nome antigo. A hipótese (c) não se confirmou. O servidor procura a página em `../../web` a partir do próprio arquivo, então rodando do `dist/` ele acha a pasta `web/` da raiz do pacote, e o campo `files` já inclui `web`.
+- **Não copio `web/` para o `dist/`**, ao contrário do que o roteiro sugeria. Com o caminho relativo à raiz do pacote, a cópia seria uma segunda versão dos mesmos arquivos, que pode ficar desatualizada. O risco que a cópia queria evitar (faltar arquivo no pacote instalado) fica coberto pelo `verify:dist`, que confere os arquivos no lugar onde o código do `dist/` procura e na lista do `npm pack --dry-run`. Os arquivos do xterm (parte 3) seguem a mesma regra: decidir na hora, mas sem duas cópias.
+- **Lista única de comandos em `src/cli/commands.ts`.** Cada comando tem nome, uso, resumo e a função que roda: `run` (síncrono, despachado pelo `main`) ou `runAsync` (o `ui`, despachado pelo `index.ts`). O `--help` é montado da lista. Os testes conferem que todo comando aparece no `--help` e responde ao próprio `--help`, o que prova que está registrado.
+- **`build` limpa o `dist/` antes** (`scripts/clean-dist.mjs`). Scripts novos: `verify:dist` (`scripts/verify-dist.mjs`, roda o `dist/` como o usuário) e `relink` (build, verificação e `npm link`). Rode o `relink` no checkout principal: o `npm link` aponta o `lore-pack` global para a pasta onde ele foi rodado.
+- **CI no GitHub Actions** (`.github/workflows/ci.yml`): typecheck, testes, build e `verify:dist`, em Ubuntu e Windows. Antes não havia CI. Versões das actions conferidas na API do GitHub: `actions/checkout@v7` e `actions/setup-node@v7`.
+- **Token por execução**, `randomBytes(24)` em base64url. O 127.0.0.1 protege da rede, mas não de outro programa ou outro usuário do mesmo computador; o token sim.
+  - A página `/` exige `?token=` na URL e responde 401 sem ele.
+  - A API exige o cabeçalho `X-Lore-Pack-Token`, que a página lê da própria URL e manda em todo pedido. Token na URL não vale para a API. O cabeçalho próprio tem um ganho extra: outro site não consegue mandá-lo sem permissão de CORS, e o servidor nunca dá essa permissão.
+  - `app.js` e `style.css` ficam sem token: não têm nenhum dado da história, e a tag `<script>` não manda cabeçalho.
+  - Não usei cookie. Cookie vale para o host inteiro, não para a porta, e qualquer outro servidor em `127.0.0.1` receberia o token.
+  - A comparação usa `timingSafeEqual`, para o tempo de resposta não dar pistas do token.
+- **O `ui` abre o navegador** com `spawn` e argumentos em lista: `cmd /c start "" <url>` no Windows (o `start` é comando interno do `cmd`, e o `""` é o título da janela, senão a URL vira título), `open` no macOS e `xdg-open` nos outros. Como no Windows a URL passa pelo `cmd`, ela só é aceita no formato exato que o `ui` monta (127.0.0.1, porta e token em base64url): nenhum caractere especial do `cmd` chega lá. Se o programa não existir, o erro é ignorado. A URL completa com token é sempre impressa. O `ui` recebe a função que abre o navegador como parâmetro, para os testes não abrirem janela.
+
+## 2026-10-02: apagar sessão pelo app
+
+Pedido do autor durante o M4b.
+- **O que faz:** `DELETE /api/sessoes/:id` apaga `sessoes/<id>/` inteira e o snapshot em `.lore-pack/snapshots/<id>/`.
+- **Confirmação:** dois cliques na página, como no Reverter (princípio 4).
+- **Proteção:** `DELETE` não é um método que outro site consiga mandar sem permissão de CORS, e a rota também exige o token.
+- **Recusa:** se a guarda tiver mudança não resolvida, responde 409. Apagar levaria junto o snapshot, e a mudança deixaria de ser acusada. É a mesma regra do `sessao fechar`.
+- **Sessão fechada também pode ser apagada.** Quem decide é o autor, e a confirmação avisa que não dá para desfazer.
+- **Só no app por enquanto.** A lógica fica em `deleteSession` (`src/cli/sessao.ts`), pronta para um `sessao apagar` na CLI se fizer falta.
+
+## 2026-10-02: instruções para a IA na pasta da história (M4b, parte 1)
+
+- **`init` grava três arquivos:** `CLAUDE.md` e `AGENTS.md`, com o mesmo texto aprovado pelo autor, e `.claude/settings.json`.
+  - O Claude Code lê o `CLAUDE.md`; outras ferramentas leem o `AGENTS.md`.
+  - O texto tem as seis regras. A sexta, "comece pelo pacote", foi acrescentada para economizar tokens.
+- **O texto fica em `instrucoes/instrucoes-ia.md`**, fora de `templates/` e com outro nome. Se fosse um `templates/CLAUDE.md`, o Claude Code carregaria as regras da história ("nunca edite fichas/") quando alguém trabalhasse neste repositório. A pasta `instrucoes/` entrou no `files` e no `verify:dist`.
+- **`.claude/settings.json`** nega `Edit` em `/biblia.md`, `/estado.md`, `/alfabeto.md`, `/fichas/**`, `/referencias/**`, `/capitulos/**`, `/CLAUDE.md`, `/AGENTS.md` e `/lore-pack.config.json`. Conferido de novo na documentação (code.claude.com/docs/en/permissions):
+  - num `.claude/settings.json` de projeto, `/path` é relativo à pasta de trabalho principal, que é a pasta da história quando o terminal abre nela;
+  - "Edit rules apply to all built-in tools that edit files", ou seja, cobre o `Write`;
+  - o próprio `.claude/` já é caminho protegido no Claude Code.
+  - Limites: não pega um script que a IA rode por conta própria, não impede leitura, e outras IAs ignoram o arquivo.
+- **A guarda passou a proteger também** `CLAUDE.md`, `AGENTS.md`, `.claude/settings.json` e `lore-pack.config.json`. Uma IA que reescreve as próprias regras, ou o comando que o terminal roda (configuração da parte 2), precisa ser acusada.
+  - Efeito colateral: rodar `atualizar-instrucoes` com uma sessão aberta faz a guarda acusar a mudança. É só clicar em "Manter".
+- **`atualizar-instrucoes [pasta] [--sobrescrever]`:**
+  - O hash do texto que o lore-pack gravou fica em `.lore-pack/instrucoes.json`.
+  - Arquivo ausente é criado. Arquivo igual não muda. Arquivo cujo hash bate com o registro (o autor não mexeu) é atualizado.
+  - O resto conta como "editado", inclusive quando não há registro e o texto é diferente.
+  - Com algum arquivo editado, o comando mostra o diff e **não grava nada**, nem os outros. Só grava com `--sobrescrever`. A CLI não é interativa, então a flag é a confirmação, como o `--reverter` da guarda.
+  - O hash é do texto normalizado (sem BOM, com `\n`), para o git no Windows trocar a quebra de linha sem isso contar como edição.
+- **`ensureLorePackDir`** saiu de dentro do `takeSnapshot`, para o registro de hashes também criar o `.lore-pack/.gitignore`.
+
+## 2026-10-02: terminal embutido, backend (M4b, parte 2)
+
+### Dependências novas (princípio 6)
+Conferidas no registro do npm em 2026-10-02. Todas MIT.
+- **`ws` 8.22.0**: WebSocket no servidor. O `node:http` não implementa o protocolo, e escrever o enquadramento do WebSocket à mão seria código de segurança sem necessidade. Só para desenvolvimento: `@types/ws`.
+- **`@xterm/xterm` 6.0.0 e `@xterm/addon-fit` 0.11.0**: o terminal no navegador (parte 3) e o ajuste do tamanho dele à janela. Os dois trazem um arquivo `.mjs` pronto, que o navegador carrega sem etapa de build.
+- **`node-pty` 1.1.0, como `optionalDependencies`**: o pseudo-terminal, que faz a IA achar que está num terminal de verdade (cores, tela cheia, teclas). Carregado com `import()` dinâmico. Se não instalar ou não carregar, o app sobe igual, e o terminal aparece desligado com o motivo.
+  - **Binários prontos** só para Windows e macOS (x64 e arm64). No Linux, o instalador do pacote tenta compilar (`node-gyp`, que pede Python, make e compilador C++).
+  - **O npm 11 bloqueia scripts de instalação** sem aprovação (`allow-scripts`). Testado numa pasta limpa no Windows: `npm install` do pacote empacotado termina, o binário pronto já está em `prebuilds/` e o `spawn` funciona sem rodar script nenhum. O `post-install` só copia o `conpty.dll` da opção experimental `useConptyDll`, que não usamos.
+  - **No Linux sem compilação**, o `node-pty` não carrega e o terminal fica desligado. Os testes que precisam dele são pulados (`skipIf`), o que o CI em Ubuntu exercita.
+  - **Risco não verificado:** no macOS, o `spawn-helper` precisa manter a permissão de execução. Se falhar, o app mostra o erro ao abrir o terminal, e copiar o pacote continua funcionando.
+- **Arquivos do xterm servidos direto de `node_modules`** (parte 3), sem copiar: mesma regra de não ter duas cópias.
+
+### Configuração: `lore-pack.config.json`
+- `{ "terminal": { "comando": "claude", "args": ["{{prompt}}"] } }`. O `init` cria esse arquivo com o padrão; sem o arquivo, vale o mesmo padrão. `"comando": "nenhum"` desliga o terminal.
+- Validado com Zod, objeto estrito: campo com erro de digitação (`"comand"`) vira erro com o nome do campo. O arquivo é lido a cada vez, então editar vale sem reiniciar o app.
+- **Regra de segurança:** comando, argumentos, pasta e ambiente vêm **só** desse arquivo e do servidor. O navegador só diz "abrir terminal para a sessão X": o corpo do `POST /api/sessoes/:id/terminais` é ignorado, e um teste manda `comando`, `args`, `cwd` e `env` para provar isso.
+- **O `{{prompt}}`** é trocado dentro de cada argumento, e cada item da lista continua sendo um argumento só. Nada vira linha de shell.
+- **A guarda protege o arquivo** (parte 1): uma IA que trocasse o comando seria acusada.
+
+### Rodar o processo
+- `cwd` é a pasta da história, `TERM=xterm-256color`, tamanho inicial 120×30.
+- **Comando resolvido antes de rodar** (`src/server/command.ts`): procura no PATH e, no Windows, com cada extensão do `PATHEXT`, na ordem (`.exe` antes de `.cmd`). O node-pty usa o `CreateProcess`, que não faz essa busca. Caminho completo também vale.
+- **Comando não achado:** o terminal aparece desligado com "instale a ferramenta ou troque `terminal.comando`".
+- **`.cmd` e `.bat`** rodam pelo `cmd.exe`, que interpreta `& | < > ^ % ! "`. Os argumentos só vêm da configuração e da instrução de início, mas, se algum tiver esses caracteres, o terminal recusa com erro claro em vez de deixar o `cmd` interpretar. O Claude Code instalado pelo WinGet é um `claude.exe`, que não passa pelo `cmd`.
+
+### WebSocket `/ws/terminais/<id>`
+- **Por que as checagens:** o navegador não aplica CORS a WebSocket. Qualquer página aberta consegue tentar um WebSocket para `127.0.0.1`, e o servidor precisa recusar sozinho. O upgrade exige:
+  - `Host` deste computador;
+  - `Origin` exatamente `http://127.0.0.1:<porta>` ou `http://localhost:<porta>`, obrigatória (navegador sempre manda);
+  - token certo, na URL, porque o navegador não deixa pôr cabeçalho em WebSocket;
+  - terminal existente.
+- **Limites:** mensagem de até 64 KB (`maxPayload`; passando disso, o `ws` fecha com 1009) e no máximo 4 terminais vivos (o quinto recebe 429).
+- **Mensagens do navegador:** `{tipo:"entrada", dados}` e `{tipo:"tamanho", colunas, linhas}`, com tamanho inteiro de 1 a 1000. Qualquer outra coisa é ignorada sem derrubar nada.
+- **Mensagens do servidor:** `saida`, `fim` (com o código de saída) e `guarda` (a lista de arquivos protegidos que mudaram, enviada quando o processo termina).
+
+### Ciclo de vida
+- **"Fechar a aba"** é a aba do terminal no app: o `DELETE /api/terminais/<id>` mata o processo. Fechar a aba do navegador **não** mata: recarregar a página reanexa ao mesmo terminal, que reenvia a saída recente (buffer de 100 mil caracteres). O processo vive até a aba do terminal ser fechada, o processo terminar ou o `lore-pack ui` encerrar.
+- **Matar a árvore inteira:** no Windows, `taskkill /PID <pid> /T /F`. O `pty.kill()` do node-pty só pega os processos ligados ao console e ainda imprime "AttachConsole failed" no terminal do autor, porque o agente auxiliar dele corre contra o próprio kill. No Linux e no macOS, `pty.kill()` (SIGHUP na sessão).
+  - O `close` espera o processo terminar de verdade, até 8 s, antes de forçar pelo PID. No Windows, uma pasta que ainda é diretório de trabalho de um processo vivo nem pode ser apagada.
+  - Um teste mata um terminal cujo processo abriu um filho, e confere que os dois morreram.
+- **Ctrl+C no `lore-pack ui`** (e SIGTERM e SIGHUP, que no Windows é fechar a janela): `shutdownApp` mata os terminais, fecha as conexões e o servidor. O evento `exit` é a última garantia, síncrona.
+- **Guarda:** abrir um terminal numa sessão sem snapshot tira um. Se já existe, mantém o existente, porque tirar outro apagaria uma mudança ainda não resolvida. Quando o processo termina, a guarda compara e avisa pelo WebSocket.
+
+### Peculiaridade do Windows (ConPTY), vista nos testes
+Um processo que espera entrada **sem ter escrito nada na tela** não recebe a digitação. Com qualquer saída antes (um prompt, uma tela), funciona. Uma IA de terminal sempre desenha antes de ler, e no navegador o xterm.js responde às consultas do console, então não afeta o uso real. Os scripts de teste imprimem algo antes de ler.
+
+## 2026-10-02: terminal embutido, front (M4b, parte 3)
+
+- **xterm servido de `node_modules`** por três rotas fixas (`/vendor/xterm.mjs`, `/vendor/xterm.css`, `/vendor/addon-fit.mjs`), resolvidas com `require.resolve`. Os pacotes trazem `.mjs` sem nenhum `import`, então o navegador carrega direto, sem build e sem cópia. Ficam sem token, como o `app.js`, porque não têm dado da história. O `verify:dist` confere que eles resolvem a partir do `dist/`. Continua sem bundler: a página ganhou cerca de 250 linhas de JS puro, e não compensou rever a decisão do M4a.
+- **O xterm é carregado com `import()` só ao abrir uma sessão.** Quem não usa o terminal não baixa os 340 KB.
+- **Layout:** na tela da sessão, as informações (comando, copiar pacote, guarda, plano, apagar) ficam à esquerda, e o terminal à direita, fixo ao rolar. A barra lateral continua. Abaixo de 1100 px de largura, vira uma coluna só. O "Copiar pacote" fica sempre na tela, com o terminal ligado ou não.
+- **Abas:** uma por terminal da sessão, com "rodando", "desconectado" ou "encerrado (código N)". Trocar de sessão só esconde a tela, e o programa continua rodando. Recarregar a página recria as abas pela lista do servidor e reanexa.
+  - Fechar a aba de um terminal **rodando** pede um segundo clique ("encerrar?"), porque mata a conversa com a IA.
+- **Copiar e colar:** Ctrl+C com texto selecionado copia; sem seleção, vai para o programa (interromper, como em qualquer terminal). Ctrl+V fica com o navegador, que cola, e o xterm manda o texto. Escrito embaixo do terminal.
+- **Tamanho:** o FitAddon ajusta o terminal ao espaço ao abrir, ao trocar de aba e ao redimensionar a janela. Cada mudança vai ao programa como `tamanho`.
+- **Quando o programa termina,** a guarda compara. Se algo mudou e a sessão está na tela, o aviso da guarda aparece sozinho, com diff, Reverter e Manter.
+- **Não apagar sessão com terminal rodando** (409): a IA continuaria escrevendo numa pasta que não existe mais, sem guarda.
+- **Verificado num navegador de verdade:** Chrome headless controlado pelo protocolo de depuração, com uma história de demonstração e o `cmd.exe` como "IA". Conferido:
+  - abre na pasta da história;
+  - digitar `echo` mostra a resposta;
+  - recarregar reanexa com o histórico;
+  - `exit 7` mostra "encerrado (código 7)";
+  - fechar a aba tira o terminal do servidor;
+  - com `"nenhum"`, o botão fica desabilitado e o motivo aparece.
+  - O único erro no console era o `favicon.ico` 404, silenciado com `<link rel="icon" href="data:,">`. O script era temporário e não ficou no repositório.

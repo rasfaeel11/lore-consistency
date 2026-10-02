@@ -7,3 +7,5 @@ Thumbs.db
 .env
 .vscode/
 .idea/
+
+.claude/worktrees/
