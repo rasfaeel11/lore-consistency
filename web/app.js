@@ -149,11 +149,103 @@ async function mostrarSessao(id) {
   $("copiar-pacote").disabled = sessao.pacote === null;
   $("copiado").textContent = sessao.pacote === null ? "Esta sessão não tem pacote.md." : "";
 
+  limparGuarda();
+
   const resumo = $("sessao-resumo-pack");
   resumo.hidden = ultimoResumo === null || ultimoResumo.id !== id;
   resumo.textContent = ultimoResumo?.texto ?? "";
   mostrar("sessao");
 }
+
+// --- Guarda do cânone ---
+
+function limparGuarda() {
+  $("guarda-status").textContent = "";
+  $("guarda-alerta").hidden = true;
+  $("vigiar").hidden = true;
+  mostrarConfirmacao(false);
+}
+
+function mostrarConfirmacao(sim) {
+  $("reverter").hidden = sim;
+  $("manter").hidden = sim;
+  $("confirmar-reverter").hidden = !sim;
+  $("cancelar-reverter").hidden = !sim;
+}
+
+async function verificarGuarda() {
+  const id = rotaAtual().id;
+  limparGuarda();
+  let guarda;
+  try {
+    guarda = await api(`/api/sessoes/${encodeURIComponent(id)}/guarda`);
+  } catch (erro) {
+    $("guarda-status").textContent = erro.message;
+    return;
+  }
+
+  if (!guarda.vigiada) {
+    $("guarda-status").textContent =
+      "Esta sessão não tem snapshot (foi criada antes da guarda do cânone). Clique em \"Começar a vigiar\" para comparar a partir de agora.";
+    $("vigiar").hidden = false;
+    return;
+  }
+  const desde = new Date(guarda.desde).toLocaleString("pt-BR");
+  if (guarda.mudancas.length === 0) {
+    $("guarda-status").textContent = `Nenhum arquivo protegido mudou desde ${desde}.`;
+    return;
+  }
+
+  const quantos = guarda.mudancas.length === 1 ? "1 arquivo protegido mudou" : `${guarda.mudancas.length} arquivos protegidos mudaram`;
+  $("guarda-titulo").textContent = `Atenção: ${quantos} desde ${desde}, fora do fechamento da sessão.`;
+  $("confirmar-reverter").textContent = `Confirmar: voltar ${guarda.mudancas.length === 1 ? "o arquivo" : `os ${guarda.mudancas.length} arquivos`} ao snapshot`;
+
+  const lista = $("guarda-lista");
+  lista.replaceChildren();
+  for (const mudanca of guarda.mudancas) {
+    const titulo = document.createElement("h4");
+    titulo.textContent = `${mudanca.tipo}: ${mudanca.arquivo}`;
+    const diff = document.createElement("pre");
+    diff.className = "diff";
+    for (const linha of mudanca.diff.split("\n")) {
+      const span = document.createElement("span");
+      if (linha.startsWith("+ ")) span.className = "entrou";
+      if (linha.startsWith("- ")) span.className = "saiu";
+      span.textContent = `${linha}\n`;
+      diff.append(span);
+    }
+    lista.append(titulo, diff);
+  }
+  $("guarda-alerta").hidden = false;
+}
+
+async function acaoGuarda(acao, mensagem) {
+  const id = rotaAtual().id;
+  try {
+    const resposta = await api(`/api/sessoes/${encodeURIComponent(id)}/guarda/${acao}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    await verificarGuarda();
+    $("guarda-status").textContent = mensagem(resposta);
+  } catch (erro) {
+    $("guarda-status").textContent = erro.message;
+  }
+}
+
+$("verificar").addEventListener("click", verificarGuarda);
+$("vigiar").addEventListener("click", () =>
+  acaoGuarda("vigiar", () => "Snapshot tirado. A partir de agora, mudanças nos arquivos protegidos serão acusadas."),
+);
+$("reverter").addEventListener("click", () => mostrarConfirmacao(true));
+$("cancelar-reverter").addEventListener("click", () => mostrarConfirmacao(false));
+$("confirmar-reverter").addEventListener("click", () =>
+  acaoGuarda("reverter", (r) => `Revertido: ${r.arquivos.map((a) => a.arquivo).join(", ")}.`),
+);
+$("manter").addEventListener("click", () =>
+  acaoGuarda("manter", (r) => `Mantido e registrado em alteracoes-diretas.md: ${r.arquivos.map((a) => a.arquivo).join(", ")}.`),
+);
 
 async function copiar(texto, mensagem) {
   try {

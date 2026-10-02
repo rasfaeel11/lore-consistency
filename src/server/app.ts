@@ -7,6 +7,7 @@ import { buildStartPrompt, isSessionId, listSessions, readSession } from "../cor
 import { readReferencias, validateStory } from "../core/validate.js";
 import { readPackOptions } from "../cli/pack.js";
 import { WEB_DIR } from "../cli/paths.js";
+import { checkGuard, hasSnapshot, keepChanges, revertChanges, takeSnapshot } from "../cli/guard.js";
 import { createSession } from "../cli/sessao.js";
 import { isFile, readStoryFiles, readText } from "../cli/story-files.js";
 
@@ -22,6 +23,7 @@ const STATIC_FILES: Record<string, { file: string; type: string }> = {
 };
 
 const SESSION_ROUTE = /^\/api\/sessoes\/([^/]+)(\/pacote)?$/;
+const GUARD_ROUTE = /^\/api\/sessoes\/([^/]+)\/guarda(?:\/(vigiar|reverter|manter))?$/;
 
 export function createAppServer(root: string): Server {
   const server = createServer((req, res) => {
@@ -70,6 +72,20 @@ async function handle(root: string, server: Server, req: IncomingMessage, res: S
 
   if (method === "GET" && path === "/api/historia") return sendJson(res, 200, storySummary(root));
   if (method === "POST" && path === "/api/sessoes") return postSession(root, req, res);
+
+  const guardMatch = GUARD_ROUTE.exec(path);
+  if (guardMatch) {
+    const id = decodeURIComponent(guardMatch[1] ?? "");
+    const action = guardMatch[2];
+    if (!isSessionId(id) || !isFile(join(root, "sessoes", id, "sessao.md"))) {
+      return sendJson(res, 404, { erro: `A sessão "${id}" não existe em sessoes/.` });
+    }
+    if (method === "GET" && action === undefined) return getGuard(root, id, res);
+    if (method === "POST" && action !== undefined) {
+      if (!isJson(req)) return sendJson(res, 415, { erro: "Mande os dados como JSON." });
+      return postGuard(root, id, action, res);
+    }
+  }
 
   const match = SESSION_ROUTE.exec(path);
   if (method === "GET" && match) {
@@ -125,10 +141,7 @@ function getPack(root: string, id: string, res: ServerResponse): void {
 }
 
 async function postSession(root: string, req: IncomingMessage, res: ServerResponse): Promise<void> {
-  // Formulários de outros sites não conseguem mandar application/json sem a permissão do servidor (CORS).
-  if (!(req.headers["content-type"] ?? "").startsWith("application/json")) {
-    return sendJson(res, 415, { erro: "Mande os dados como JSON." });
-  }
+  if (!isJson(req)) return sendJson(res, 415, { erro: "Mande os dados como JSON." });
   const text = await readBody(req);
   if (text === undefined) return sendJson(res, 413, { erro: "Pedido grande demais." });
 
@@ -161,6 +174,32 @@ async function postSession(root: string, req: IncomingMessage, res: ServerRespon
   const created = createSession({ ...options.options, root, capitulo, plan: plano });
   if (!created.ok) return sendJson(res, 400, { erro: created.error });
   sendJson(res, 201, { id: created.id, resumo: created.summary });
+}
+
+function getGuard(root: string, id: string, res: ServerResponse): void {
+  const report = checkGuard(root, id);
+  if (!report) return sendJson(res, 200, { vigiada: false, mudancas: [] });
+  sendJson(res, 200, {
+    vigiada: true,
+    desde: report.since,
+    mudancas: report.changes.map((change) => ({ arquivo: change.path, tipo: change.kind, diff: change.diff })),
+  });
+}
+
+// vigiar tira um snapshot novo; reverter e manter exigem um snapshot existente.
+// O clique no botão (com a confirmação na página) é a confirmação do princípio 4.
+function postGuard(root: string, id: string, action: string, res: ServerResponse): void {
+  if (action === "vigiar") return sendJson(res, 200, { desde: takeSnapshot(root, id) });
+  if (!hasSnapshot(root, id)) {
+    return sendJson(res, 409, { erro: `A sessão "${id}" não tem snapshot. Clique em "Começar a vigiar" primeiro.` });
+  }
+  const changes = action === "reverter" ? revertChanges(root, id) : keepChanges(root, id);
+  sendJson(res, 200, { arquivos: changes.map((change) => ({ arquivo: change.path, tipo: change.kind })) });
+}
+
+// Formulários de outros sites não conseguem mandar application/json sem a permissão do servidor (CORS).
+function isJson(req: IncomingMessage): boolean {
+  return (req.headers["content-type"] ?? "").startsWith("application/json");
 }
 
 // Lê o corpo do pedido. Devolve undefined se passar do limite.

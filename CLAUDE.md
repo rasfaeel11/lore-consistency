@@ -41,8 +41,8 @@ Fora do escopo até a v1: chamar API de IA, contas de usuário, hospedagem onlin
 
 ```
 src/
-  core/        # funções puras: schemas da ficha e da sessão, validação, montagem do pacote, capítulos e sessões
-  cli/         # comandos: init, check, pack, capitulo, sessao, app. Lê e escreve arquivos.
+  core/        # funções puras: schemas da ficha e da sessão, validação, montagem do pacote, capítulos, sessões e guarda do cânone
+  cli/         # comandos: init, check, pack, capitulo, sessao, ui. Lê e escreve arquivos.
   server/      # servidor do app local (node:http, só 127.0.0.1). Usa o núcleo e as funções da CLI.
   index.ts     # ponto de entrada da CLI
 web/           # página do app: HTML, CSS e JS puro, servidos pelo server/
@@ -80,7 +80,8 @@ Cânone organizado por tema (magia, combate, política...), em `referencias/<id>
 ## Capítulos e sessões
 
 - Capítulo: `capitulos/cap-NN.md`. Título = primeiro cabeçalho `# `; sem ele, o nome do arquivo.
-- Sessão: pasta `sessoes/<id>/` com `sessao.md`, `pacote.md` e, depois de fechada, `fechamento.md`. Id `data-capítulo-sequência` (`2026-10-01-cap-03-01`), igual ao nome da pasta.
+- Sessão: pasta `sessoes/<id>/` com `sessao.md`, `pacote.md` e, depois de fechada, `fechamento.md`. Id `data-capítulo-sequência` (`2026-10-01-cap-03-01`), igual ao nome da pasta. Se o autor mantiver alterações diretas em arquivos protegidos, elas ficam registradas em `alteracoes-diretas.md`.
+- Guarda do cânone: ao criar a sessão, o lore-pack copia os arquivos protegidos (`biblia.md`, `estado.md`, `alfabeto.md`, `fichas/`, `referencias/`, `capitulos/`) para `.lore-pack/snapshots/<id>/`, pasta fora do git e ignorada pelo `check`. `sessao verificar` e o app comparam com o snapshot; `sessao fechar` recusa enquanto houver mudança não resolvida. É detecção depois do fato, não bloqueio.
 - Cabeçalho do `sessao.md`: `id`, `capitulo` (precisa existir em `capitulos/`), `criada_em` (ISO), `status` (`aberta` | `fechada`), `fechada_em` (obrigatório se fechada). Corpo: `## Plano` e, depois de fechada, `## Resumo` opcional.
 
 ## Stack e convenções

@@ -2,13 +2,13 @@ import { createServer } from "node:net";
 import type { AddressInfo } from "node:net";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { app } from "../../src/cli/app.js";
+import { ui } from "../../src/cli/ui.js";
 
 const HISTORIA = fileURLToPath(new URL("../fixtures/sessoes/historia", import.meta.url));
 
-describe("app", () => {
+describe("ui", () => {
   it("abre o servidor e mostra o endereço", async () => {
-    const { result, server } = await app(["--porta", "0", HISTORIA]);
+    const { result, server } = await ui(["--porta", "0", HISTORIA]);
 
     try {
       expect(result.exitCode).toBe(0);
@@ -22,7 +22,7 @@ describe("app", () => {
   });
 
   it("pasta que não é história dá erro e não abre servidor", async () => {
-    const { result, server } = await app(["--porta", "0", fileURLToPath(new URL(".", import.meta.url))]);
+    const { result, server } = await ui(["--porta", "0", fileURLToPath(new URL(".", import.meta.url))]);
 
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain("biblia.md");
@@ -30,7 +30,7 @@ describe("app", () => {
   });
 
   it("porta inválida dá erro claro", async () => {
-    const { result } = await app(["--porta", "abc", HISTORIA]);
+    const { result } = await ui(["--porta", "abc", HISTORIA]);
 
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain("--porta");
@@ -42,7 +42,7 @@ describe("app", () => {
     const port = String((busy.address() as AddressInfo).port);
 
     try {
-      const { result, server } = await app(["--porta", port, HISTORIA]);
+      const { result, server } = await ui(["--porta", port, HISTORIA]);
       expect(result.exitCode).toBe(1);
       expect(result.stderr).toContain(`porta ${port} já está em uso`);
       expect(server).toBeUndefined();
@@ -52,9 +52,9 @@ describe("app", () => {
   });
 
   it("--help mostra o uso", async () => {
-    const { result } = await app(["--help"]);
+    const { result } = await ui(["--help"]);
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("lore-pack app");
+    expect(result.stdout).toContain("lore-pack ui");
   });
 });

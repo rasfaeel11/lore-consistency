@@ -73,6 +73,25 @@
         <button id="copiar-pacote" type="button">Copiar pacote</button>
         <span id="copiado" class="dica" role="status"></span>
 
+        <h3>Guarda do cânone</h3>
+        <p class="dica">
+          Acusa mudanças na bíblia, estado, alfabeto, fichas, referências e capítulos desde que a sessão começou.
+          É detecção depois do fato: não impede ninguém de escrever.
+        </p>
+        <button id="verificar" type="button">Verificar alterações</button>
+        <button id="vigiar" type="button" hidden>Começar a vigiar</button>
+        <p id="guarda-status" role="status"></p>
+        <div id="guarda-alerta" class="alerta" hidden>
+          <p id="guarda-titulo"></p>
+          <div id="guarda-lista"></div>
+          <div class="acoes">
+            <button id="reverter" type="button">Reverter tudo</button>
+            <button id="confirmar-reverter" type="button" class="perigo" hidden></button>
+            <button id="cancelar-reverter" type="button" hidden>Cancelar</button>
+            <button id="manter" type="button">Manter e registrar</button>
+          </div>
+        </div>
+
         <h3>sessao.md</h3>
         <pre id="sessao-corpo"></pre>
       </section>

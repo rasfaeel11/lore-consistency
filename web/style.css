@@ -218,3 +218,42 @@ pre.erro {
     padding: 16px;
   }
 }
+
+.alerta {
+  border: 2px solid var(--erro);
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin: 12px 0;
+}
+
+#guarda-titulo {
+  color: var(--erro);
+  font-weight: 600;
+  margin-top: 0;
+}
+
+.alerta h4 {
+  margin: 12px 0 4px;
+  font-family: ui-monospace, monospace;
+  font-size: 0.85rem;
+}
+
+pre.diff .entrou {
+  color: var(--aberta);
+}
+
+pre.diff .saiu {
+  color: var(--erro);
+}
+
+.acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+button.perigo {
+  border-color: var(--erro);
+  color: var(--erro);
+}

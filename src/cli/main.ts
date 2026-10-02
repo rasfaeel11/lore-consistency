@@ -20,7 +20,7 @@ Comandos:
                    cria o próximo capítulo em capitulos/
   sessao nova | listar | fechar
                    abre, lista e fecha sessões de escrita (veja "lore-pack sessao --help")
-  app [pasta]      abre o app da história no navegador (veja "lore-pack app --help")
+  ui [pasta]       abre o app da história no navegador (veja "lore-pack ui --help")
 
 Opções:
   -h, --help       mostra esta ajuda

@@ -234,6 +234,66 @@ describe("servidor do app", () => {
     });
   });
 
+  describe("guarda do cânone", () => {
+    const ESTADO = () => join(story, "estado.md");
+
+    it("sessão sem snapshot: vigiada false; vigiar tira o snapshot", async () => {
+      const before = await (await fetch(`${base}/api/sessoes/${OPEN}/guarda`)).json();
+      expect(before).toEqual({ vigiada: false, mudancas: [] });
+
+      const response = await postJson(`/api/sessoes/${OPEN}/guarda/vigiar`, {});
+      expect(response.status).toBe(200);
+
+      const after = await (await fetch(`${base}/api/sessoes/${OPEN}/guarda`)).json();
+      expect(after.vigiada).toBe(true);
+      expect(after.desde).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    });
+
+    it("sessão criada pelo app já nasce vigiada e acusa a mudança com o diff", async () => {
+      const { id } = await (await postJson("/api/sessoes", { capitulo: "cap-02", plano: "Ana no farol." })).json();
+      writeFileSync(ESTADO(), "Mudado pela IA.\n");
+
+      const body = await (await fetch(`${base}/api/sessoes/${id}/guarda`)).json();
+
+      expect(body.vigiada).toBe(true);
+      expect(body.mudancas).toEqual([
+        { arquivo: "estado.md", tipo: "alterado", diff: expect.stringContaining("+ Mudado pela IA.") },
+      ]);
+    });
+
+    it("reverter restaura e manter registra", async () => {
+      await postJson(`/api/sessoes/${OPEN}/guarda/vigiar`, {});
+      const original = readFileSync(ESTADO(), "utf8");
+      writeFileSync(ESTADO(), "x");
+
+      const reverted = await (await postJson(`/api/sessoes/${OPEN}/guarda/reverter`, {})).json();
+      expect(reverted.arquivos).toEqual([{ arquivo: "estado.md", tipo: "alterado" }]);
+      expect(readFileSync(ESTADO(), "utf8")).toBe(original);
+
+      writeFileSync(ESTADO(), "y");
+      const kept = await (await postJson(`/api/sessoes/${OPEN}/guarda/manter`, {})).json();
+      expect(kept.arquivos).toEqual([{ arquivo: "estado.md", tipo: "alterado" }]);
+      expect(readFileSync(join(story, "sessoes", OPEN, "alteracoes-diretas.md"), "utf8")).toContain("estado.md");
+    });
+
+    it("reverter sem snapshot dá 409", async () => {
+      const response = await postJson(`/api/sessoes/${OPEN}/guarda/reverter`, {});
+
+      expect(response.status).toBe(409);
+      expect((await response.json()).erro).toContain("snapshot");
+    });
+
+    it("ações da guarda só aceitam POST em JSON", async () => {
+      await postJson(`/api/sessoes/${OPEN}/guarda/vigiar`, {});
+      writeFileSync(ESTADO(), "x");
+
+      const response = await fetch(`${base}/api/sessoes/${OPEN}/guarda/reverter`, { method: "POST" });
+
+      expect(response.status).toBe(415);
+      expect(readFileSync(ESTADO(), "utf8")).toBe("x");
+    });
+  });
+
   describe("proteções", () => {
     it("recusa POST que não seja JSON (formulário de outro site)", async () => {
       const response = await fetch(`${base}/api/sessoes`, {
