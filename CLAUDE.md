@@ -6,7 +6,7 @@ Ferramenta para quem escreve histórias com ajuda de IA. Organiza o mundo da his
 
 ## Status atual
 
-- Marco em andamento: **M4b** (terminal embutido)
+- Marco em andamento: **M5** (`apply`: aprovação do fechamento)
 - Atualize esta linha ao fechar cada marco.
 
 ## Roteiro
@@ -54,6 +54,7 @@ tests/
 docs/
   DECISOES.md  # diário de decisões
   V2.md        # ideias adiadas
+  CHECKLIST-M4b.md # teste manual do terminal e da guarda com o Claude Code de verdade
   prompts-dev/ # prompts para construir o projeto com o Claude Code (não são do produto)
 ```
 
