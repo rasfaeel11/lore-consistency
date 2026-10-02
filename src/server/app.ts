@@ -2,6 +2,8 @@ import { timingSafeEqual } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
+import type { Duplex } from "node:stream";
+import { WebSocketServer } from "ws";
 import { basename, join } from "node:path";
 import { listChapters } from "../core/chapters.js";
 import { buildStartPrompt, isSessionId, listSessions, readSession } from "../core/session.js";
@@ -11,6 +13,7 @@ import { WEB_DIR } from "../cli/paths.js";
 import { checkGuard, hasSnapshot, keepChanges, revertChanges, takeSnapshot } from "../cli/guard.js";
 import { createSession, deleteSession } from "../cli/sessao.js";
 import { isFile, readStoryFiles, readText } from "../cli/story-files.js";
+import { TerminalManager, loadNodePty, type PtyLoad } from "./terminal.js";
 
 // Princípio 8: o app só escuta no próprio computador.
 const HOST = "127.0.0.1";
@@ -32,15 +35,58 @@ export const WEB_FILES = [PAGE.file, ...Object.values(STATIC_FILES).map((entry) 
 
 const SESSION_ROUTE = /^\/api\/sessoes\/([^/]+)(\/pacote)?$/;
 const GUARD_ROUTE = /^\/api\/sessoes\/([^/]+)\/guarda(?:\/(vigiar|reverter|manter))?$/;
+const OPEN_TERMINAL_ROUTE = /^\/api\/sessoes\/([^/]+)\/terminais$/;
+const TERMINAL_ROUTE = /^\/api\/terminais\/([0-9a-f]+)$/;
+const TERMINAL_SOCKET_ROUTE = /^\/ws\/terminais\/([^/]+)$/;
+// Mensagem do navegador para o terminal: digitação e tamanho da tela. 64 KB sobra.
+const MAX_SOCKET_MESSAGE = 64 * 1024;
 
-export function createAppServer(root: string, token: string): Server {
+type App = { root: string; token: string; terminals: TerminalManager; sockets: WebSocketServer };
+// Cada servidor guarda o seu app, para o shutdownApp achar os terminais dele.
+const apps = new WeakMap<Server, App>();
+
+export type AppOptions = {
+  // Os testes trocam para simular o node-pty ausente.
+  loadPty?: () => Promise<PtyLoad>;
+};
+
+export function createAppServer(root: string, token: string, options: AppOptions = {}): Server {
+  const app: App = {
+    root,
+    token,
+    terminals: new TerminalManager(root, options.loadPty ?? loadNodePty),
+    sockets: new WebSocketServer({ noServer: true, maxPayload: MAX_SOCKET_MESSAGE }),
+  };
   const server = createServer((req, res) => {
-    handle(root, token, server, req, res).catch((error: unknown) => {
+    handle(app, server, req, res).catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error);
       sendJson(res, 500, { erro: `Erro inesperado: ${message}` });
     });
   });
+  server.on("upgrade", (req, socket, head) => upgrade(app, server, req, socket, head));
+  apps.set(server, app);
   return server;
+}
+
+// Ctrl+C (ou fechar a janela do terminal) no "lore-pack ui": encerra os terminais antes de sair.
+// O "exit" é a última garantia: síncrono, mata pelo PID o que ainda estiver vivo.
+export function stopOnExit(server: Server): void {
+  const stop = () => {
+    void shutdownApp(server).finally(() => process.exit(0));
+  };
+  for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) process.once(signal, stop);
+  process.once("exit", () => apps.get(server)?.terminals.killAllNow());
+}
+
+// Encerra tudo: mata os terminais (nenhum processo fica órfão), fecha as conexões e o servidor.
+// Pode ser chamado mais de uma vez.
+export async function shutdownApp(server: Server): Promise<void> {
+  const app = apps.get(server);
+  await app?.terminals.closeAll();
+  for (const ws of app?.sockets.clients ?? []) ws.terminate();
+  server.closeAllConnections();
+  if (!server.listening) return;
+  await new Promise<void>((resolve) => server.close(() => resolve()));
 }
 
 // Começa a escutar em 127.0.0.1. Porta 0 deixa o sistema escolher (usado nos testes).
@@ -55,17 +101,17 @@ export function listen(server: Server, port: number): Promise<string> {
   });
 }
 
-async function handle(
-  root: string,
-  token: string,
-  server: Server,
-  req: IncomingMessage,
-  res: ServerResponse,
-): Promise<void> {
+// Os endereços pelos quais o próprio app é acessado: 127.0.0.1 ou localhost, nesta porta.
+function ownHosts(server: Server): string[] {
+  const { port } = server.address() as AddressInfo;
+  return [`127.0.0.1:${port}`, `localhost:${port}`];
+}
+
+async function handle(app: App, server: Server, req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const { root, token } = app;
   // Um site aberto no navegador pode tentar falar com o app. Recusamos se o Host
   // (truque de "DNS rebinding") ou a Origin não forem deste computador e desta porta.
-  const { port } = server.address() as AddressInfo;
-  const hosts = [`127.0.0.1:${port}`, `localhost:${port}`];
+  const hosts = ownHosts(server);
   if (!hosts.includes(req.headers.host ?? "")) {
     return sendJson(res, 403, { erro: "Acesso permitido só pelo próprio computador." });
   }
@@ -98,6 +144,26 @@ async function handle(
 
   if (method === "GET" && path === "/api/historia") return sendJson(res, 200, storySummary(root));
   if (method === "POST" && path === "/api/sessoes") return postSession(root, req, res);
+
+  // Terminal embutido. O navegador só diz QUAL sessão: o corpo do pedido é ignorado, e
+  // comando, argumentos, pasta e ambiente vêm do lore-pack.config.json e do servidor.
+  if (method === "GET" && path === "/api/terminal") return sendJson(res, 200, await app.terminals.status());
+  if (method === "GET" && path === "/api/terminais") return sendJson(res, 200, app.terminals.list());
+  const openMatch = OPEN_TERMINAL_ROUTE.exec(path);
+  if (method === "POST" && openMatch) {
+    if (!isJson(req)) return sendJson(res, 415, { erro: "Mande os dados como JSON." });
+    const id = decodeURIComponent(openMatch[1] ?? "");
+    if (!isSessionId(id) || !isFile(join(root, "sessoes", id, "sessao.md"))) {
+      return sendJson(res, 404, { erro: `A sessão "${id}" não existe em sessoes/.` });
+    }
+    const opened = await app.terminals.open(id);
+    return opened.ok ? sendJson(res, 201, { id: opened.id }) : sendJson(res, opened.status, { erro: opened.error });
+  }
+  const terminalMatch = TERMINAL_ROUTE.exec(path);
+  if (method === "DELETE" && terminalMatch) {
+    const closed = await app.terminals.close(terminalMatch[1] ?? "");
+    return closed ? sendJson(res, 200, { fechado: terminalMatch[1] }) : sendJson(res, 404, { erro: "Esse terminal não existe (já foi fechado?)." });
+  }
 
   const guardMatch = GUARD_ROUTE.exec(path);
   if (guardMatch) {
@@ -270,4 +336,25 @@ async function readBody(req: IncomingMessage): Promise<string | undefined> {
 function sendJson(res: ServerResponse, status: number, data: unknown): void {
   res.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
   res.end(JSON.stringify(data));
+}
+
+// Pedido para abrir o WebSocket de um terminal. Qualquer página aberta no navegador consegue
+// tentar um WebSocket para 127.0.0.1, e o navegador não aplica CORS a WebSocket. Por isso,
+// antes de aceitar: Host deste computador, Origin exatamente o próprio app (obrigatória),
+// token certo (vem na URL, porque o navegador não deixa pôr cabeçalho em WebSocket) e terminal que existe.
+function upgrade(app: App, server: Server, req: IncomingMessage, socket: Duplex, head: Buffer): void {
+  const refuse = (status: number, text: string) => {
+    socket.end(`HTTP/1.1 ${status} ${text}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
+  };
+  const hosts = ownHosts(server);
+  if (!hosts.includes(req.headers.host ?? "")) return refuse(403, "Forbidden");
+  if (!hosts.some((host) => req.headers.origin === `http://${host}`)) return refuse(403, "Forbidden");
+
+  const url = new URL(req.url ?? "/", `http://${HOST}`);
+  if (!sameToken(url.searchParams.get("token"), app.token)) return refuse(401, "Unauthorized");
+  const match = TERMINAL_SOCKET_ROUTE.exec(url.pathname);
+  const id = match?.[1] ?? "";
+  if (!match || !app.terminals.has(id)) return refuse(404, "Not Found");
+
+  app.sockets.handleUpgrade(req, socket, head, (ws) => app.terminals.attach(id, ws));
 }

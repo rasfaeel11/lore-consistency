@@ -26,12 +26,19 @@
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^24.19.0",
+    "@types/ws": "^8.18.2",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^5.0.3"
   },
   "dependencies": {
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "ws": "^8.22.0",
     "yaml": "^2.9.1",
     "zod": "^4.6.5"
+  },
+  "optionalDependencies": {
+    "node-pty": "^1.1.0"
   }
 }

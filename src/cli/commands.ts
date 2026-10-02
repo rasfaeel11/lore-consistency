@@ -7,6 +7,7 @@ import { pack } from "./pack.js";
 import { fail, ok, type CliResult } from "./result.js";
 import { sessao } from "./sessao.js";
 import { ui } from "./ui.js";
+import { stopOnExit } from "../server/app.js";
 
 // A única lista de comandos. O --help é montado dela, o main despacha os síncronos
 // e o index.ts despacha os assíncronos. Comando novo entra aqui e em nenhum outro lugar.
@@ -57,7 +58,11 @@ export const COMMANDS: Command[] = [
     name: "ui",
     usage: "ui [pasta]",
     summary: 'abre o app da história no navegador (veja "lore-pack ui --help")',
-    runAsync: async (args) => (await ui(args)).result,
+    runAsync: async (args) => {
+      const { result, server } = await ui(args);
+      if (server) stopOnExit(server);
+      return result;
+    },
   },
 ];
 

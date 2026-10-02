@@ -1,0 +1,6 @@
+{
+  "terminal": {
+    "comando": "claude",
+    "args": ["{{prompt}}"]
+  }
+}

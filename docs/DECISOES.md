@@ -192,3 +192,50 @@ Pedido do autor durante o M4b.
   - Com algum arquivo editado, o comando mostra o diff e **não grava nada**, nem os outros. Só grava com `--sobrescrever`. A CLI não é interativa, então a flag é a confirmação, como o `--reverter` da guarda.
   - O hash é do texto normalizado (sem BOM, com `\n`), para o git no Windows trocar a quebra de linha sem isso contar como edição.
 - **`ensureLorePackDir`** saiu de dentro do `takeSnapshot`, para o registro de hashes também criar o `.lore-pack/.gitignore`.
+
+## 2026-10-02: terminal embutido, backend (M4b, parte 2)
+
+### Dependências novas (princípio 6)
+Conferidas no registro do npm em 2026-10-02. Todas MIT.
+- **`ws` 8.22.0**: WebSocket no servidor. O `node:http` não implementa o protocolo, e escrever o enquadramento do WebSocket à mão seria código de segurança sem necessidade. Só para desenvolvimento: `@types/ws`.
+- **`@xterm/xterm` 6.0.0 e `@xterm/addon-fit` 0.11.0**: o terminal no navegador (parte 3) e o ajuste do tamanho dele à janela. Os dois trazem um arquivo `.mjs` pronto, que o navegador carrega sem etapa de build.
+- **`node-pty` 1.1.0, como `optionalDependencies`**: o pseudo-terminal, que faz a IA achar que está num terminal de verdade (cores, tela cheia, teclas). Carregado com `import()` dinâmico. Se não instalar ou não carregar, o app sobe igual, e o terminal aparece desligado com o motivo.
+  - **Binários prontos** só para Windows e macOS (x64 e arm64). No Linux, o instalador do pacote tenta compilar (`node-gyp`, que pede Python, make e compilador C++).
+  - **O npm 11 bloqueia scripts de instalação** sem aprovação (`allow-scripts`). Testado numa pasta limpa no Windows: `npm install` do pacote empacotado termina, o binário pronto já está em `prebuilds/` e o `spawn` funciona sem rodar script nenhum. O `post-install` só copia o `conpty.dll` da opção experimental `useConptyDll`, que não usamos.
+  - **No Linux sem compilação**, o `node-pty` não carrega e o terminal fica desligado. Os testes que precisam dele são pulados (`skipIf`), o que o CI em Ubuntu exercita.
+  - **Risco não verificado:** no macOS, o `spawn-helper` precisa manter a permissão de execução. Se falhar, o app mostra o erro ao abrir o terminal, e copiar o pacote continua funcionando.
+- **Arquivos do xterm servidos direto de `node_modules`** (parte 3), sem copiar: mesma regra de não ter duas cópias.
+
+### Configuração: `lore-pack.config.json`
+- `{ "terminal": { "comando": "claude", "args": ["{{prompt}}"] } }`. O `init` cria esse arquivo com o padrão; sem o arquivo, vale o mesmo padrão. `"comando": "nenhum"` desliga o terminal.
+- Validado com Zod, objeto estrito: campo com erro de digitação (`"comand"`) vira erro com o nome do campo. O arquivo é lido a cada vez, então editar vale sem reiniciar o app.
+- **Regra de segurança:** comando, argumentos, pasta e ambiente vêm **só** desse arquivo e do servidor. O navegador só diz "abrir terminal para a sessão X": o corpo do `POST /api/sessoes/:id/terminais` é ignorado, e um teste manda `comando`, `args`, `cwd` e `env` para provar isso.
+- **O `{{prompt}}`** é trocado dentro de cada argumento, e cada item da lista continua sendo um argumento só. Nada vira linha de shell.
+- **A guarda protege o arquivo** (parte 1): uma IA que trocasse o comando seria acusada.
+
+### Rodar o processo
+- `cwd` é a pasta da história, `TERM=xterm-256color`, tamanho inicial 120×30.
+- **Comando resolvido antes de rodar** (`src/server/command.ts`): procura no PATH e, no Windows, com cada extensão do `PATHEXT`, na ordem (`.exe` antes de `.cmd`). O node-pty usa o `CreateProcess`, que não faz essa busca. Caminho completo também vale.
+- **Comando não achado:** o terminal aparece desligado com "instale a ferramenta ou troque `terminal.comando`".
+- **`.cmd` e `.bat`** rodam pelo `cmd.exe`, que interpreta `& | < > ^ % ! "`. Os argumentos só vêm da configuração e da instrução de início, mas, se algum tiver esses caracteres, o terminal recusa com erro claro em vez de deixar o `cmd` interpretar. O Claude Code instalado pelo WinGet é um `claude.exe`, que não passa pelo `cmd`.
+
+### WebSocket `/ws/terminais/<id>`
+- **Por que as checagens:** o navegador não aplica CORS a WebSocket. Qualquer página aberta consegue tentar um WebSocket para `127.0.0.1`, e o servidor precisa recusar sozinho. O upgrade exige:
+  - `Host` deste computador;
+  - `Origin` exatamente `http://127.0.0.1:<porta>` ou `http://localhost:<porta>`, obrigatória (navegador sempre manda);
+  - token certo, na URL, porque o navegador não deixa pôr cabeçalho em WebSocket;
+  - terminal existente.
+- **Limites:** mensagem de até 64 KB (`maxPayload`; passando disso, o `ws` fecha com 1009) e no máximo 4 terminais vivos (o quinto recebe 429).
+- **Mensagens do navegador:** `{tipo:"entrada", dados}` e `{tipo:"tamanho", colunas, linhas}`, com tamanho inteiro de 1 a 1000. Qualquer outra coisa é ignorada sem derrubar nada.
+- **Mensagens do servidor:** `saida`, `fim` (com o código de saída) e `guarda` (a lista de arquivos protegidos que mudaram, enviada quando o processo termina).
+
+### Ciclo de vida
+- **"Fechar a aba"** é a aba do terminal no app: o `DELETE /api/terminais/<id>` mata o processo. Fechar a aba do navegador **não** mata: recarregar a página reanexa ao mesmo terminal, que reenvia a saída recente (buffer de 100 mil caracteres). O processo vive até a aba do terminal ser fechada, o processo terminar ou o `lore-pack ui` encerrar.
+- **Matar a árvore inteira:** no Windows, `taskkill /PID <pid> /T /F`. O `pty.kill()` do node-pty só pega os processos ligados ao console e ainda imprime "AttachConsole failed" no terminal do autor, porque o agente auxiliar dele corre contra o próprio kill. No Linux e no macOS, `pty.kill()` (SIGHUP na sessão).
+  - O `close` espera o processo terminar de verdade, até 8 s, antes de forçar pelo PID. No Windows, uma pasta que ainda é diretório de trabalho de um processo vivo nem pode ser apagada.
+  - Um teste mata um terminal cujo processo abriu um filho, e confere que os dois morreram.
+- **Ctrl+C no `lore-pack ui`** (e SIGTERM e SIGHUP, que no Windows é fechar a janela): `shutdownApp` mata os terminais, fecha as conexões e o servidor. O evento `exit` é a última garantia, síncrona.
+- **Guarda:** abrir um terminal numa sessão sem snapshot tira um. Se já existe, mantém o existente, porque tirar outro apagaria uma mudança ainda não resolvida. Quando o processo termina, a guarda compara e avisa pelo WebSocket.
+
+### Peculiaridade do Windows (ConPTY), vista nos testes
+Um processo que espera entrada **sem ter escrito nada na tela** não recebe a digitação. Com qualquer saída antes (um prompt, uma tela), funciona. Uma IA de terminal sempre desenha antes de ler, e no navegador o xterm.js responde às consultas do console, então não afeta o uso real. Os scripts de teste imprimem algo antes de ler.
