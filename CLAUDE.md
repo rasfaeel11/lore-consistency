@@ -110,3 +110,4 @@ Estou reaprendendo TypeScript depois de um tempo parado e quero aprender enquant
 - **Não invente APIs nem flags.** Se depender de detalhe que pode ter mudado, confira na documentação.
 - Quando houver decisão relevante, registre direto em `docs/DECISOES.md` e me comunique. Não espere aprovação.
 - Sempre mande um commit depois de um prompt;
+- Sempre me diga o que testar depois de cada Prompt;
