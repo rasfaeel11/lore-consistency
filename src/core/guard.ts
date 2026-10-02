@@ -1,7 +1,17 @@
 // Guarda do cânone: compara os arquivos protegidos com o snapshot tirado quando a sessão começou.
 // Detecta depois do fato; não impede ninguém de escrever.
 
-const PROTECTED_FILES = ["biblia.md", "estado.md", "alfabeto.md"];
+// Além do cânone, as instruções e a configuração: se a IA mudasse o lore-pack.config.json,
+// escolheria o comando que o terminal roda da próxima vez.
+const PROTECTED_FILES = [
+  "biblia.md",
+  "estado.md",
+  "alfabeto.md",
+  "CLAUDE.md",
+  "AGENTS.md",
+  ".claude/settings.json",
+  "lore-pack.config.json",
+];
 const PROTECTED_DIRS = ["fichas/", "referencias/", "capitulos/"];
 const CONTEXT_LINES = 2;
 

@@ -9,7 +9,8 @@
   "files": [
     "dist",
     "templates",
-    "web"
+    "web",
+    "instrucoes"
   ],
   "scripts": {
     "dev": "tsx src/index.ts",

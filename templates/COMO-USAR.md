@@ -12,6 +12,7 @@ Uma pasta, arquivos curtos, uma conversa nova por capítulo. O que não está no
 - `capitulos/`: o texto final de cada capítulo (`cap-01.md`, `cap-02.md`...). Só a última cena vai no pacote. Crie com `lore-pack capitulo novo "título"`.
 - `sessoes/`: uma pasta por sessão de escrita, com o plano (`sessao.md`), o pacote (`pacote.md`) e o fechamento. Crie com `lore-pack sessao nova`, veja com `lore-pack sessao listar` e feche com `lore-pack sessao fechar`.
 - Guarda do cânone: quando a sessão é criada, o lore-pack guarda uma cópia da bíblia, do estado, do alfabeto, das fichas, das referências e dos capítulos (em `.lore-pack/`). Se a IA mexer direto nesses arquivos, `lore-pack sessao verificar <id>` (ou o botão "Verificar alterações" no app) mostra o que mudou, e você escolhe reverter ou manter. Ela avisa depois que aconteceu; não impede a IA de escrever.
+- `CLAUDE.md` e `AGENTS.md`: regras para a IA que trabalha nesta pasta (o que ela pode e não pode editar). `.claude/settings.json` proíbe o Claude Code de editar os arquivos protegidos. Para atualizar depois de uma versão nova do lore-pack: `lore-pack atualizar-instrucoes`.
 - `modelos/`: modelos de ficha e de referência.
 
 Prefere janela a terminal? Rode `lore-pack ui` na pasta da história. O navegador abre sozinho; se não abrir, copie o endereço completo que ele mostrar (com o `?token=`, sem ele o app não responde): capítulos e sessões na barra lateral, botões de nova sessão, de copiar o pacote e de apagar uma sessão. Só funciona no seu computador.

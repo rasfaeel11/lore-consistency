@@ -26,18 +26,19 @@ for (const command of COMMANDS) {
   if (own.status !== 0) problems.push(`"${command.name} --help" saiu com ${own.status}: ${own.stderr.trim()}`);
 }
 
-const { WEB_DIR, TEMPLATES_DIR } = await import(dist("cli/paths.js"));
+const { WEB_DIR, TEMPLATES_DIR, INSTRUCTIONS_DIR } = await import(dist("cli/paths.js"));
 const { WEB_FILES } = await import(dist("server/app.js"));
 for (const file of WEB_FILES) {
   if (!existsSync(join(WEB_DIR, file))) problems.push(`Falta ${join(WEB_DIR, file)}, que o servidor serve.`);
 }
 if (!existsSync(join(TEMPLATES_DIR, "biblia.md"))) problems.push(`Falta ${TEMPLATES_DIR}, que o init copia.`);
+if (!existsSync(join(INSTRUCTIONS_DIR, "instrucoes-ia.md"))) problems.push(`Falta ${INSTRUCTIONS_DIR}, que o init grava.`);
 
 // --dry-run não cria o .tgz; --json lista os arquivos que iriam no pacote.
 // Comando fixo, sem nada vindo de fora: pode passar pelo shell (no Windows o npm é um .cmd).
 const packed = JSON.parse(execSync("npm pack --dry-run --json --ignore-scripts", { cwd: root, encoding: "utf8" }));
 const shipped = new Set(packed[0].files.map((file) => file.path));
-const needed = ["dist/index.js", "templates/biblia.md", ...WEB_FILES.map((file) => `web/${file}`)];
+const needed = ["dist/index.js", "templates/biblia.md", "instrucoes/instrucoes-ia.md", "instrucoes/claude-settings.json", ...WEB_FILES.map((file) => `web/${file}`)];
 for (const path of needed) {
   if (!shipped.has(path)) problems.push(`${path} não vai no pacote do npm (confira o campo "files" do package.json).`);
 }

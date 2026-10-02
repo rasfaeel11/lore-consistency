@@ -2,6 +2,7 @@ import { parseArgs } from "node:util";
 import { capitulo } from "./capitulo.js";
 import { check } from "./check.js";
 import { init } from "./init.js";
+import { atualizarInstrucoes } from "./instrucoes.js";
 import { pack } from "./pack.js";
 import { fail, ok, type CliResult } from "./result.js";
 import { sessao } from "./sessao.js";
@@ -44,6 +45,12 @@ export const COMMANDS: Command[] = [
     usage: "sessao nova | listar | fechar | verificar",
     summary: 'abre, lista, fecha e verifica sessões de escrita (veja "lore-pack sessao --help")',
     run: sessao,
+  },
+  {
+    name: "atualizar-instrucoes",
+    usage: "atualizar-instrucoes [pasta]",
+    summary: 'atualiza o CLAUDE.md, o AGENTS.md e o .claude/settings.json da história (veja "--help")',
+    run: atualizarInstrucoes,
   },
   {
     // Deixa um servidor rodando, por isso é assíncrono.

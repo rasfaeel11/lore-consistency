@@ -15,6 +15,12 @@ describe("isProtectedPath", () => {
     }
   });
 
+  it("protege as instruções e a configuração que a IA não pode mudar sozinha", () => {
+    for (const path of ["CLAUDE.md", "AGENTS.md", ".claude/settings.json", "lore-pack.config.json"]) {
+      expect(isProtectedPath(path), path).toBe(true);
+    }
+  });
+
   it("não protege sessões (rascunho e fechamento), modelos nem outros arquivos", () => {
     for (const path of [
       "sessoes/2026-10-01-cap-01-01/rascunho.md",

@@ -47,6 +47,7 @@ src/
   index.ts     # ponto de entrada da CLI
 web/           # página do app: HTML, CSS e JS puro, servidos pelo server/
 templates/     # o que o `init` copia para a pasta da história
+instrucoes/    # texto do CLAUDE.md/AGENTS.md e o .claude/settings.json que o `init` grava na história
 scripts/       # scripts do build: limpar o dist/ e conferir o build (verify:dist)
 tests/
   fixtures/    # pastas de história de teste (válidas e inválidas)
@@ -82,7 +83,7 @@ Cânone organizado por tema (magia, combate, política...), em `referencias/<id>
 
 - Capítulo: `capitulos/cap-NN.md`. Título = primeiro cabeçalho `# `; sem ele, o nome do arquivo.
 - Sessão: pasta `sessoes/<id>/` com `sessao.md`, `pacote.md` e, depois de fechada, `fechamento.md`. Id `data-capítulo-sequência` (`2026-10-01-cap-03-01`), igual ao nome da pasta. Se o autor mantiver alterações diretas em arquivos protegidos, elas ficam registradas em `alteracoes-diretas.md`.
-- Guarda do cânone: ao criar a sessão, o lore-pack copia os arquivos protegidos (`biblia.md`, `estado.md`, `alfabeto.md`, `fichas/`, `referencias/`, `capitulos/`) para `.lore-pack/snapshots/<id>/`, pasta fora do git e ignorada pelo `check`. `sessao verificar` e o app comparam com o snapshot; `sessao fechar` recusa enquanto houver mudança não resolvida. É detecção depois do fato, não bloqueio.
+- Guarda do cânone: ao criar a sessão, o lore-pack copia os arquivos protegidos (`biblia.md`, `estado.md`, `alfabeto.md`, `fichas/`, `referencias/`, `capitulos/`, mais `CLAUDE.md`, `AGENTS.md`, `.claude/settings.json` e `lore-pack.config.json`) para `.lore-pack/snapshots/<id>/`, pasta fora do git e ignorada pelo `check`. `sessao verificar` e o app comparam com o snapshot; `sessao fechar` recusa enquanto houver mudança não resolvida. É detecção depois do fato, não bloqueio.
 - Cabeçalho do `sessao.md`: `id`, `capitulo` (precisa existir em `capitulos/`), `criada_em` (ISO), `status` (`aberta` | `fechada`), `fechada_em` (obrigatório se fechada). Corpo: `## Plano` e, depois de fechada, `## Resumo` opcional.
 
 ## Stack e convenções

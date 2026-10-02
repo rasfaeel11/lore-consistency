@@ -171,3 +171,24 @@ Pedido do autor durante o M4b.
 - **Recusa:** se a guarda tiver mudança não resolvida, responde 409. Apagar levaria junto o snapshot, e a mudança deixaria de ser acusada. É a mesma regra do `sessao fechar`.
 - **Sessão fechada também pode ser apagada.** Quem decide é o autor, e a confirmação avisa que não dá para desfazer.
 - **Só no app por enquanto.** A lógica fica em `deleteSession` (`src/cli/sessao.ts`), pronta para um `sessao apagar` na CLI se fizer falta.
+
+## 2026-10-02: instruções para a IA na pasta da história (M4b, parte 1)
+
+- **`init` grava três arquivos:** `CLAUDE.md` e `AGENTS.md`, com o mesmo texto aprovado pelo autor, e `.claude/settings.json`.
+  - O Claude Code lê o `CLAUDE.md`; outras ferramentas leem o `AGENTS.md`.
+  - O texto tem as seis regras. A sexta, "comece pelo pacote", foi acrescentada para economizar tokens.
+- **O texto fica em `instrucoes/instrucoes-ia.md`**, fora de `templates/` e com outro nome. Se fosse um `templates/CLAUDE.md`, o Claude Code carregaria as regras da história ("nunca edite fichas/") quando alguém trabalhasse neste repositório. A pasta `instrucoes/` entrou no `files` e no `verify:dist`.
+- **`.claude/settings.json`** nega `Edit` em `/biblia.md`, `/estado.md`, `/alfabeto.md`, `/fichas/**`, `/referencias/**`, `/capitulos/**`, `/CLAUDE.md`, `/AGENTS.md` e `/lore-pack.config.json`. Conferido de novo na documentação (code.claude.com/docs/en/permissions):
+  - num `.claude/settings.json` de projeto, `/path` é relativo à pasta de trabalho principal, que é a pasta da história quando o terminal abre nela;
+  - "Edit rules apply to all built-in tools that edit files", ou seja, cobre o `Write`;
+  - o próprio `.claude/` já é caminho protegido no Claude Code.
+  - Limites: não pega um script que a IA rode por conta própria, não impede leitura, e outras IAs ignoram o arquivo.
+- **A guarda passou a proteger também** `CLAUDE.md`, `AGENTS.md`, `.claude/settings.json` e `lore-pack.config.json`. Uma IA que reescreve as próprias regras, ou o comando que o terminal roda (configuração da parte 2), precisa ser acusada.
+  - Efeito colateral: rodar `atualizar-instrucoes` com uma sessão aberta faz a guarda acusar a mudança. É só clicar em "Manter".
+- **`atualizar-instrucoes [pasta] [--sobrescrever]`:**
+  - O hash do texto que o lore-pack gravou fica em `.lore-pack/instrucoes.json`.
+  - Arquivo ausente é criado. Arquivo igual não muda. Arquivo cujo hash bate com o registro (o autor não mexeu) é atualizado.
+  - O resto conta como "editado", inclusive quando não há registro e o texto é diferente.
+  - Com algum arquivo editado, o comando mostra o diff e **não grava nada**, nem os outros. Só grava com `--sobrescrever`. A CLI não é interativa, então a flag é a confirmação, como o `--reverter` da guarda.
+  - O hash é do texto normalizado (sem BOM, com `\n`), para o git no Windows trocar a quebra de linha sem isso contar como edição.
+- **`ensureLorePackDir`** saiu de dentro do `takeSnapshot`, para o registro de hashes também criar o `.lore-pack/.gitignore`.

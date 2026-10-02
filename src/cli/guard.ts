@@ -43,9 +43,17 @@ export function takeSnapshot(root: string, id: string, now = new Date()): string
   mkdirSync(dir, { recursive: true });
   const manifest: Manifest = { criado_em: now.toISOString(), arquivos };
   writeFileSync(join(dir, MANIFEST), `${JSON.stringify(manifest, null, 2)}\n`);
-  const ignore = join(root, GUARD_DIR, ".gitignore");
-  if (!existsSync(ignore)) writeFileSync(ignore, "*\n");
+  ensureLorePackDir(root);
   return manifest.criado_em;
+}
+
+// Cria .lore-pack/ com um .gitignore "*", que deixa a pasta fora do git sem mexer no .gitignore do autor.
+export function ensureLorePackDir(root: string): string {
+  const dir = join(root, GUARD_DIR);
+  mkdirSync(dir, { recursive: true });
+  const ignore = join(dir, ".gitignore");
+  if (!existsSync(ignore)) writeFileSync(ignore, "*\n");
+  return dir;
 }
 
 // Compara o estado atual com o snapshot. Sem snapshot, undefined.
