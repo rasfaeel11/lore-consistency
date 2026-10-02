@@ -144,6 +144,11 @@ function protectedPaths(root: string): string[] {
   return paths.sort();
 }
 
+// Apaga o snapshot de uma sessão (usado quando a sessão é apagada).
+export function removeSnapshot(root: string, id: string): void {
+  rmSync(snapshotDir(root, id), { recursive: true, force: true });
+}
+
 function snapshotDir(root: string, id: string): string {
   return join(root, GUARD_DIR, "snapshots", id);
 }

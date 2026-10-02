@@ -9,7 +9,7 @@ import { readReferencias, validateStory } from "../core/validate.js";
 import { readPackOptions } from "../cli/pack.js";
 import { WEB_DIR } from "../cli/paths.js";
 import { checkGuard, hasSnapshot, keepChanges, revertChanges, takeSnapshot } from "../cli/guard.js";
-import { createSession } from "../cli/sessao.js";
+import { createSession, deleteSession } from "../cli/sessao.js";
 import { isFile, readStoryFiles, readText } from "../cli/story-files.js";
 
 // Princípio 8: o app só escuta no próprio computador.
@@ -114,6 +114,7 @@ async function handle(
   }
 
   const match = SESSION_ROUTE.exec(path);
+  if (method === "DELETE" && match && !match[2]) return removeSession(root, decodeURIComponent(match[1] ?? ""), res);
   if (method === "GET" && match) {
     const id = decodeURIComponent(match[1] ?? "");
     return match[2] ? getPack(root, id, res) : getSession(root, id, res);
@@ -200,6 +201,14 @@ async function postSession(root: string, req: IncomingMessage, res: ServerRespon
   const created = createSession({ ...options.options, root, capitulo, plan: plano });
   if (!created.ok) return sendJson(res, 400, { erro: created.error });
   sendJson(res, 201, { id: created.id, resumo: created.summary });
+}
+
+// DELETE não é um método que outro site consiga mandar sem permissão de CORS, e ainda exige o token.
+// A confirmação do autor (princípio 4) é o segundo clique na página.
+function removeSession(root: string, id: string, res: ServerResponse): void {
+  const deleted = deleteSession(root, id);
+  if (deleted.ok) return sendJson(res, 200, { apagada: id });
+  sendJson(res, deleted.reason === "nao-existe" ? 404 : 409, { erro: deleted.error });
 }
 
 function getGuard(root: string, id: string, res: ServerResponse): void {

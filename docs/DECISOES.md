@@ -161,3 +161,13 @@ Limites, segundo a documentação: a regra vale para as ferramentas de arquivo, 
   - Não usei cookie. Cookie vale para o host inteiro, não para a porta, e qualquer outro servidor em `127.0.0.1` receberia o token.
   - A comparação usa `timingSafeEqual`, para o tempo de resposta não dar pistas do token.
 - **O `ui` abre o navegador** com `spawn` e argumentos em lista: `cmd /c start "" <url>` no Windows (o `start` é comando interno do `cmd`, e o `""` é o título da janela, senão a URL vira título), `open` no macOS e `xdg-open` nos outros. Como no Windows a URL passa pelo `cmd`, ela só é aceita no formato exato que o `ui` monta (127.0.0.1, porta e token em base64url): nenhum caractere especial do `cmd` chega lá. Se o programa não existir, o erro é ignorado. A URL completa com token é sempre impressa. O `ui` recebe a função que abre o navegador como parâmetro, para os testes não abrirem janela.
+
+## 2026-10-02: apagar sessão pelo app
+
+Pedido do autor durante o M4b.
+- **O que faz:** `DELETE /api/sessoes/:id` apaga `sessoes/<id>/` inteira e o snapshot em `.lore-pack/snapshots/<id>/`.
+- **Confirmação:** dois cliques na página, como no Reverter (princípio 4).
+- **Proteção:** `DELETE` não é um método que outro site consiga mandar sem permissão de CORS, e a rota também exige o token.
+- **Recusa:** se a guarda tiver mudança não resolvida, responde 409. Apagar levaria junto o snapshot, e a mudança deixaria de ser acusada. É a mesma regra do `sessao fechar`.
+- **Sessão fechada também pode ser apagada.** Quem decide é o autor, e a confirmação avisa que não dá para desfazer.
+- **Só no app por enquanto.** A lógica fica em `deleteSession` (`src/cli/sessao.ts`), pronta para um `sessao apagar` na CLI se fizer falta.

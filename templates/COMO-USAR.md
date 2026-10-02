@@ -14,7 +14,7 @@ Uma pasta, arquivos curtos, uma conversa nova por capítulo. O que não está no
 - Guarda do cânone: quando a sessão é criada, o lore-pack guarda uma cópia da bíblia, do estado, do alfabeto, das fichas, das referências e dos capítulos (em `.lore-pack/`). Se a IA mexer direto nesses arquivos, `lore-pack sessao verificar <id>` (ou o botão "Verificar alterações" no app) mostra o que mudou, e você escolhe reverter ou manter. Ela avisa depois que aconteceu; não impede a IA de escrever.
 - `modelos/`: modelos de ficha e de referência.
 
-Prefere janela a terminal? Rode `lore-pack ui` na pasta da história. O navegador abre sozinho; se não abrir, copie o endereço completo que ele mostrar (com o `?token=`, sem ele o app não responde): capítulos e sessões na barra lateral, botão de nova sessão e de copiar o pacote. Só funciona no seu computador.
+Prefere janela a terminal? Rode `lore-pack ui` na pasta da história. O navegador abre sozinho; se não abrir, copie o endereço completo que ele mostrar (com o `?token=`, sem ele o app não responde): capítulos e sessões na barra lateral, botões de nova sessão, de copiar o pacote e de apagar uma sessão. Só funciona no seu computador.
 - `prompts-de-sessao/`: os prompts que você cola na IA, numerados na ordem de uso.
 
 ## O ritual de cada sessão

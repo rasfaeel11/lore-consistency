@@ -157,6 +157,8 @@ async function mostrarSessao(id) {
   $("copiado").textContent = sessao.pacote === null ? "Esta sessão não tem pacote.md." : "";
 
   limparGuarda();
+  mostrarConfirmacaoApagar(false);
+  $("apagar-status").textContent = "";
 
   const resumo = $("sessao-resumo-pack");
   resumo.hidden = ultimoResumo === null || ultimoResumo.id !== id;
@@ -253,6 +255,30 @@ $("confirmar-reverter").addEventListener("click", () =>
 $("manter").addEventListener("click", () =>
   acaoGuarda("manter", (r) => `Mantido e registrado em alteracoes-diretas.md: ${r.arquivos.map((a) => a.arquivo).join(", ")}.`),
 );
+
+// --- Apagar sessão (segundo clique confirma) ---
+
+function mostrarConfirmacaoApagar(sim) {
+  $("apagar").hidden = sim;
+  $("confirmar-apagar").hidden = !sim;
+  $("cancelar-apagar").hidden = !sim;
+}
+
+$("apagar").addEventListener("click", () => mostrarConfirmacaoApagar(true));
+$("cancelar-apagar").addEventListener("click", () => mostrarConfirmacaoApagar(false));
+$("confirmar-apagar").addEventListener("click", async () => {
+  const id = rotaAtual().id;
+  try {
+    await api(`/api/sessoes/${encodeURIComponent(id)}`, { method: "DELETE" });
+  } catch (erro) {
+    mostrarConfirmacaoApagar(false);
+    $("apagar-status").textContent = erro.message;
+    return;
+  }
+  await carregarHistoria();
+  location.hash = "";
+  $("inicio").querySelector("p").textContent = `Sessão ${id} apagada.`;
+});
 
 async function copiar(texto, mensagem) {
   try {

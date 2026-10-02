@@ -1,4 +1,4 @@
-import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { request, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -327,6 +327,52 @@ describe("servidor do app", () => {
 
       expect(response.status).toBe(415);
       expect(readFileSync(ESTADO(), "utf8")).toBe("x");
+    });
+  });
+
+  describe("DELETE /api/sessoes/:id", () => {
+    it("apaga a pasta da sessão e o snapshot, e ela some da lista", async () => {
+      const { id } = await (await postJson("/api/sessoes", { capitulo: "cap-02", plano: "Ana no farol." })).json();
+      expect(existsSync(join(story, ".lore-pack", "snapshots", id))).toBe(true);
+
+      const response = await fetch(`${base}/api/sessoes/${id}`, { method: "DELETE" });
+
+      expect(response.status).toBe(200);
+      expect(existsSync(join(story, "sessoes", id))).toBe(false);
+      expect(existsSync(join(story, ".lore-pack", "snapshots", id))).toBe(false);
+      const historia = await (await fetch(`${base}/api/historia`)).json();
+      expect(JSON.stringify(historia)).not.toContain(id);
+    });
+
+    it("apaga sessão fechada e sessão sem snapshot", async () => {
+      const closed = "2026-09-28-cap-02-01";
+
+      expect((await fetch(`${base}/api/sessoes/${closed}`, { method: "DELETE" })).status).toBe(200);
+      expect((await fetch(`${base}/api/sessoes/${OPEN}`, { method: "DELETE" })).status).toBe(200);
+      expect(existsSync(join(story, "sessoes", closed))).toBe(false);
+      expect(existsSync(join(story, "sessoes", OPEN))).toBe(false);
+    });
+
+    it("recusa com 409 se a guarda tiver mudança não resolvida, e não apaga nada", async () => {
+      await postJson(`/api/sessoes/${OPEN}/guarda/vigiar`, {});
+      writeFileSync(join(story, "estado.md"), "Mudado pela IA.\n");
+
+      const response = await fetch(`${base}/api/sessoes/${OPEN}`, { method: "DELETE" });
+
+      expect(response.status).toBe(409);
+      expect((await response.json()).erro).toContain("estado.md");
+      expect(existsSync(join(story, "sessoes", OPEN, "sessao.md"))).toBe(true);
+    });
+
+    it("sessão inexistente ou id inválido dá 404 e não apaga nada", async () => {
+      expect((await fetch(`${base}/api/sessoes/2026-01-01-cap-01-01`, { method: "DELETE" })).status).toBe(404);
+      expect((await fetch(`${base}/api/sessoes/..%2F..%2Fsessoes`, { method: "DELETE" })).status).toBe(404);
+      expect(existsSync(join(story, "sessoes", OPEN))).toBe(true);
+    });
+
+    it("sem token dá 401 e não apaga", async () => {
+      expect((await globalThis.fetch(`${base}/api/sessoes/${OPEN}`, { method: "DELETE" })).status).toBe(401);
+      expect(existsSync(join(story, "sessoes", OPEN))).toBe(true);
     });
   });
 

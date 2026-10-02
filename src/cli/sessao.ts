@@ -13,7 +13,15 @@ import {
 } from "../core/session.js";
 import { validateStory } from "../core/validate.js";
 import { formatReport } from "./check.js";
-import { checkGuard, formatGuardReport, hasSnapshot, keepChanges, revertChanges, takeSnapshot } from "./guard.js";
+import {
+  checkGuard,
+  formatGuardReport,
+  hasSnapshot,
+  keepChanges,
+  removeSnapshot,
+  revertChanges,
+  takeSnapshot,
+} from "./guard.js";
 import { PACK_OPTIONS, readPackOptions, writePack, type PackOptions } from "./pack.js";
 import { fail, ok, type CliResult } from "./result.js";
 import { findStoryRoot, isDirectory, isFile, readStoryFiles, readText } from "./story-files.js";
@@ -237,6 +245,31 @@ function closeCommand(args: string[]): CliResult {
   );
   lines.push("Aplicar as mudanças do fechamento nas fichas e no estado.md ainda é manual.");
   return ok(`${lines.join("\n")}\n`);
+}
+
+export type DeleteSessionResult =
+  | { ok: true }
+  | { ok: false; reason: "nao-existe" | "guarda"; error: string };
+
+// Apaga sessoes/<id>/ e o snapshot da sessão. Quem chama já confirmou com o autor (princípio 4).
+// Recusa se a guarda tiver mudança não resolvida: sem o snapshot, ela deixaria de ser acusada.
+export function deleteSession(root: string, id: string): DeleteSessionResult {
+  const folder = join(root, "sessoes", id);
+  if (!isSessionId(id) || !isFile(join(folder, "sessao.md"))) {
+    return { ok: false, reason: "nao-existe", error: `A sessão "${id}" não existe em sessoes/.` };
+  }
+  const guard = checkGuard(root, id);
+  if (guard && guard.changes.length > 0) {
+    const files = guard.changes.map((change) => change.path).join(", ");
+    return {
+      ok: false,
+      reason: "guarda",
+      error: `Arquivos protegidos mudaram durante esta sessão (${files}). Reverta ou mantenha as alterações antes de apagar a sessão. Nada foi apagado.`,
+    };
+  }
+  rmSync(folder, { recursive: true, force: true });
+  removeSnapshot(root, id);
+  return { ok: true };
 }
 
 function verifyCommand(args: string[]): CliResult {
