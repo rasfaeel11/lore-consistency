@@ -76,7 +76,9 @@ describe("sessao", () => {
       expect(pacote).toContain("id: ana-ferreira");
       expect(pacote).toContain("Aninha escondeu o mapa.");
 
-      expect(result.stdout).toContain(`claude "Leia o arquivo sessoes/${created}/pacote.md e siga as instruções dele."`);
+      expect(result.stdout).toContain(`claude "Leia o arquivo sessoes/${created}/pacote.md e siga as instruções dele. Escreva o texto das cenas em sessoes/${created}/rascunho.md e, ao final, as propostas de mudança em sessoes/${created}/fechamento.md. Não edite nenhum outro arquivo."`);
+      expect(pacote).toContain("=== ARQUIVOS DESTA SESSÃO ===");
+      expect(pacote).toContain(`sessoes/${created}/rascunho.md`);
       expect(run("check", story).exitCode).toBe(0);
     });
 

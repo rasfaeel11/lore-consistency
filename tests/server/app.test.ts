@@ -163,7 +163,7 @@ describe("servidor do app", () => {
       expect(response.status).toBe(200);
       expect(body).toMatchObject({ id: OPEN, capitulo: "cap-02", status: "aberta" });
       expect(body.corpo).toContain("## Plano");
-      expect(body.comando).toBe(`claude "Leia o arquivo sessoes/${OPEN}/pacote.md e siga as instruções dele."`);
+      expect(body.comando).toBe(`claude "Leia o arquivo sessoes/${OPEN}/pacote.md e siga as instruções dele. Escreva o texto das cenas em sessoes/${OPEN}/rascunho.md e, ao final, as propostas de mudança em sessoes/${OPEN}/fechamento.md. Não edite nenhum outro arquivo."`);
     });
 
     it("sessão inexistente ou id inválido dá 404 com mensagem", async () => {

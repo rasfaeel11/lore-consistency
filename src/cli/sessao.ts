@@ -100,7 +100,7 @@ function newSession(args: string[]): CliResult {
 ${created.summary}
 Para começar no Claude Code, abra o terminal na pasta da história e rode:
   cd "${root}"
-  claude "${buildStartPrompt(packPath)}"
+  claude "${buildStartPrompt(created.id)}"
 
 Com outra IA, cole o conteúdo de ${packPath} na conversa.
 `);
@@ -143,7 +143,7 @@ export function createSession(request: NewSessionRequest): NewSessionResult {
 
   mkdirSync(folder, { recursive: true });
   writeFileSync(join(folder, "sessao.md"), newSessionFile({ id, capitulo, criada_em: now.toISOString(), plano: request.plan }));
-  const packResult = writePack({ ...request, output: join(folder, "pacote.md"), chapter: capitulo });
+  const packResult = writePack({ ...request, output: join(folder, "pacote.md"), chapter: capitulo, sessionId: id });
   if (packResult.exitCode !== 0) {
     // A pasta acabou de ser criada por nós: apagar não perde nada do usuário.
     rmSync(folder, { recursive: true, force: true });

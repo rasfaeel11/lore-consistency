@@ -154,7 +154,7 @@ function getSession(root: string, id: string, res: ServerResponse): void {
     ...read.session,
     corpo: read.body,
     pacote: isFile(join(root, packPath)) ? packPath : null,
-    comando: `claude "${buildStartPrompt(packPath)}"`,
+    comando: `claude "${buildStartPrompt(id)}"`,
   });
 }
 

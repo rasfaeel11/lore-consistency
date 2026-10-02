@@ -146,8 +146,28 @@ export function closeSession(content: string, fechadaEm: string, resumo?: string
 }
 
 // Instrução curta que inicia a IA. O caminho é relativo à pasta da história.
-export function buildStartPrompt(packPath: string): string {
-  return `Leia o arquivo ${packPath} e siga as instruções dele.`;
+export function buildStartPrompt(id: string): string {
+  // Uma linha só e sem aspas: vai como argumento do comando que abre a IA.
+  const folder = `sessoes/${id}`;
+  return (
+    `Leia o arquivo ${folder}/pacote.md e siga as instruções dele. ` +
+    `Escreva o texto das cenas em ${folder}/rascunho.md e, ao final, as propostas de mudança em ${folder}/fechamento.md. ` +
+    "Não edite nenhum outro arquivo."
+  );
+}
+
+// Bloco que vai no fim do pacote de uma sessão. O pacote também é colado em chats que não
+// mexem em arquivos (Gemini, ChatGPT), por isso a regra vale só para quem consegue.
+export function buildSessionFilesBlock(id: string): string {
+  const folder = `sessoes/${id}`;
+  return [
+    "=== ARQUIVOS DESTA SESSÃO ===",
+    "Se você consegue ler e escrever arquivos nesta pasta (por exemplo, no Claude Code):",
+    `- Escreva o texto das cenas em ${folder}/rascunho.md.`,
+    `- Ao final, escreva as propostas de mudança em ${folder}/fechamento.md, no formato de prompts-de-sessao/04-fechar-sessao.md.`,
+    "- Não edite nenhum outro arquivo. Nada vira cânone sem a minha aprovação.",
+    "",
+  ].join("\n");
 }
 
 function localDate(date: Date): string {
