@@ -128,6 +128,12 @@ button:hover {
 
 #conteudo {
   padding: 24px 32px;
+  min-width: 0;
+}
+
+/* Início e nova sessão leem melhor estreitos; a sessão usa a largura toda, por causa do terminal. */
+#inicio,
+#nova {
   max-width: 900px;
 }
 
@@ -256,4 +262,100 @@ pre.diff .saiu {
 button.perigo {
   border-color: var(--erro);
   color: var(--erro);
+}
+
+/* --- Sessão: informações de um lado, terminal do outro --- */
+
+#sessao:not([hidden]) {
+  display: grid;
+  grid-template-columns: minmax(300px, 1fr) minmax(420px, 1.5fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.sessao-info {
+  min-width: 0;
+}
+
+#painel-terminal {
+  position: sticky;
+  top: 16px;
+  min-width: 0;
+}
+
+.terminal-barra {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+#abas-terminal {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex: 1;
+}
+
+.aba {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--borda);
+  border-radius: 6px;
+  font-size: 0.82rem;
+}
+
+.aba button {
+  border: none;
+  background: none;
+  padding: 4px 8px;
+}
+
+.aba[aria-selected="true"] {
+  border-color: var(--destaque);
+  background: var(--barra);
+}
+
+.aba .estado {
+  color: var(--aberta);
+}
+
+.aba.encerrado .estado {
+  color: var(--suave);
+}
+
+.aba .fechar {
+  color: var(--suave);
+  padding: 4px 6px;
+}
+
+.terminal {
+  height: calc(100vh - 160px);
+  min-height: 320px;
+  background: #1c1b18;
+  border: 1px solid var(--borda);
+  border-radius: 6px;
+  padding: 6px;
+}
+
+.terminal[hidden] {
+  display: none;
+}
+
+#terminais:empty {
+  display: none;
+}
+
+@media (max-width: 1100px) {
+  #sessao:not([hidden]) {
+    grid-template-columns: 1fr;
+  }
+
+  #painel-terminal {
+    position: static;
+  }
+
+  .terminal {
+    height: 60vh;
+  }
 }

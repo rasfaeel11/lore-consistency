@@ -437,6 +437,21 @@ describe("terminal embutido", SLOW, () => {
       expect(await waitDead(Number(neto))).toBe(true);
     });
 
+    it.skipIf(!ptyAvailable)("não apaga uma sessão com terminal rodando", async () => {
+      nodeScript("vivo");
+      await start();
+      const { body } = await openTerminal();
+
+      const response = await api(`/api/sessoes/${OPEN}`, { method: "DELETE" });
+
+      expect(response.status).toBe(409);
+      expect((await response.json()).erro).toContain("terminal");
+      expect(existsSync(join(story, "sessoes", OPEN, "sessao.md"))).toBe(true);
+
+      await api(`/api/terminais/${body.id}`, { method: "DELETE" });
+      expect((await api(`/api/sessoes/${OPEN}`, { method: "DELETE" })).status).toBe(200);
+    });
+
     it("DELETE de terminal inexistente dá 404", async () => {
       nodeScript("eco");
       await start();

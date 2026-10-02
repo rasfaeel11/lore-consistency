@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import type { Duplex } from "node:stream";
@@ -28,6 +29,15 @@ const PAGE = { file: "index.html", type: "text/html; charset=utf-8" };
 const STATIC_FILES: Record<string, { file: string; type: string }> = {
   "/app.js": { file: "app.js", type: "text/javascript; charset=utf-8" },
   "/style.css": { file: "style.css", type: "text/css; charset=utf-8" },
+};
+
+// Arquivos do terminal no navegador, servidos direto do node_modules (sem copiar, sem build).
+// Lista fechada, como a de cima. Os pacotes não têm "exports", então o caminho do arquivo resolve.
+const require = createRequire(import.meta.url);
+export const VENDOR_FILES: Record<string, { module: string; type: string }> = {
+  "/vendor/xterm.mjs": { module: "@xterm/xterm/lib/xterm.mjs", type: "text/javascript; charset=utf-8" },
+  "/vendor/xterm.css": { module: "@xterm/xterm/css/xterm.css", type: "text/css; charset=utf-8" },
+  "/vendor/addon-fit.mjs": { module: "@xterm/addon-fit/lib/addon-fit.mjs", type: "text/javascript; charset=utf-8" },
 };
 
 // Usado pelo verify:dist para conferir que o build tem tudo o que o servidor serve.
@@ -126,6 +136,8 @@ async function handle(app: App, server: Server, req: IncomingMessage, res: Serve
 
   const staticFile = STATIC_FILES[path];
   if (method === "GET" && staticFile) return sendFile(res, staticFile);
+  const vendorFile = VENDOR_FILES[path];
+  if (method === "GET" && vendorFile) return sendVendor(res, vendorFile);
 
   // Sem o token, outro programa ou outro usuário deste computador não usa o app.
   if (method === "GET" && path === "/") {
@@ -180,7 +192,14 @@ async function handle(app: App, server: Server, req: IncomingMessage, res: Serve
   }
 
   const match = SESSION_ROUTE.exec(path);
-  if (method === "DELETE" && match && !match[2]) return removeSession(root, decodeURIComponent(match[1] ?? ""), res);
+  if (method === "DELETE" && match && !match[2]) {
+    const id = decodeURIComponent(match[1] ?? "");
+    // A IA continuaria escrevendo numa pasta que não existe mais, sem guarda.
+    if (app.terminals.list().some((t) => t.sessao === id && t.rodando)) {
+      return sendJson(res, 409, { erro: "Esta sessão tem um terminal rodando. Feche o terminal antes de apagar a sessão." });
+    }
+    return removeSession(root, id, res);
+  }
   if (method === "GET" && match) {
     const id = decodeURIComponent(match[1] ?? "");
     return match[2] ? getPack(root, id, res) : getSession(root, id, res);
@@ -301,6 +320,17 @@ function postGuard(root: string, id: string, action: string, res: ServerResponse
 function sendFile(res: ServerResponse, entry: { file: string; type: string }): void {
   res.writeHead(200, { "Content-Type": entry.type, "Cache-Control": "no-store" });
   res.end(readFileSync(join(WEB_DIR, entry.file)));
+}
+
+function sendVendor(res: ServerResponse, entry: { module: string; type: string }): void {
+  let file: string;
+  try {
+    file = require.resolve(entry.module);
+  } catch {
+    return sendJson(res, 404, { erro: `Falta o pacote ${entry.module.split("/").slice(0, 2).join("/")}. Reinstale o lore-pack.` });
+  }
+  res.writeHead(200, { "Content-Type": entry.type, "Cache-Control": "no-store" });
+  res.end(readFileSync(file));
 }
 
 // Compara em tempo constante, para o tempo de resposta não dar pistas do token.

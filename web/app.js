@@ -164,6 +164,8 @@ async function mostrarSessao(id) {
   resumo.hidden = ultimoResumo === null || ultimoResumo.id !== id;
   resumo.textContent = ultimoResumo?.texto ?? "";
   mostrar("sessao");
+  // Depois de mostrar: o terminal só sabe o próprio tamanho quando está visível.
+  await mostrarTerminais(id);
 }
 
 // --- Guarda do cânone ---
@@ -330,6 +332,219 @@ $("form-nova").addEventListener("submit", async (evento) => {
   } catch (erro) {
     $("erro-nova").textContent = erro.message;
     $("erro-nova").hidden = false;
+  } finally {
+    botao.disabled = false;
+  }
+});
+
+// --- Terminal embutido ---
+// Um objeto por terminal aberto (de qualquer sessão). Trocar de sessão só esconde a tela;
+// o programa continua rodando no servidor. Recarregar a página reanexa pela lista do servidor.
+const terminais = new Map();
+let terminalAtivo = null;
+let modulosXterm = null;
+
+// O xterm só é baixado quando a sessão é aberta: quem não usa o terminal não paga por ele.
+function carregarXterm() {
+  modulosXterm ??= Promise.all([import("/vendor/xterm.mjs"), import("/vendor/addon-fit.mjs")]).then(
+    ([xterm, fit]) => ({ Terminal: xterm.Terminal, FitAddon: fit.FitAddon }),
+  );
+  return modulosXterm;
+}
+
+function avisoTerminal(texto) {
+  $("terminal-aviso").textContent = texto ?? "";
+  $("terminal-aviso").hidden = !texto;
+}
+
+async function mostrarTerminais(sessaoId) {
+  avisoTerminal(null);
+  let estado;
+  try {
+    estado = await api("/api/terminal");
+  } catch (erro) {
+    estado = { ligado: false, motivo: erro.message };
+  }
+  // Desligado (config "nenhum", comando não instalado, node-pty ausente): o motivo fica na tela.
+  $("abrir-terminal").disabled = !estado.ligado;
+  if (!estado.ligado) avisoTerminal(estado.motivo);
+
+  try {
+    for (const t of await api("/api/terminais")) {
+      if (!terminais.has(t.id)) await criarTerminal(t.id, t.sessao);
+    }
+  } catch (erro) {
+    avisoTerminal(`Não consegui mostrar os terminais: ${erro.message}`);
+  }
+  desenharAbas(sessaoId);
+}
+
+async function criarTerminal(id, sessao) {
+  const { Terminal, FitAddon } = await carregarXterm();
+  const el = document.createElement("div");
+  el.className = "terminal";
+  el.hidden = true;
+  $("terminais").append(el);
+
+  const term = new Terminal({
+    cursorBlink: true,
+    fontFamily: "ui-monospace, Consolas, 'Cascadia Mono', monospace",
+    fontSize: 14,
+    theme: { background: "#1c1b18" },
+  });
+  const fit = new FitAddon();
+  term.loadAddon(fit);
+  term.open(el);
+
+  const t = { id, sessao, term, fit, el, ws: null, rodando: true, codigo: null, desconectado: false };
+  terminais.set(id, t);
+  term.onData((dados) => enviar(t, { tipo: "entrada", dados }));
+  term.onResize(({ cols, rows }) => enviar(t, { tipo: "tamanho", colunas: cols, linhas: rows }));
+  term.attachCustomKeyEventHandler((evento) => teclaEspecial(t, evento));
+  conectar(t);
+  return t;
+}
+
+function conectar(t) {
+  const protocolo = location.protocol === "https:" ? "wss" : "ws";
+  // O navegador não deixa pôr cabeçalho em WebSocket: o token vai na URL.
+  const ws = new WebSocket(`${protocolo}://${location.host}/ws/terminais/${t.id}?token=${encodeURIComponent(TOKEN)}`);
+  t.ws = ws;
+  ws.addEventListener("open", () => ajustar(t));
+  ws.addEventListener("message", (evento) => {
+    const mensagem = JSON.parse(evento.data);
+    if (mensagem.tipo === "saida") t.term.write(mensagem.dados);
+    if (mensagem.tipo === "fim") {
+      t.rodando = false;
+      t.codigo = mensagem.codigo;
+      t.term.write(`\r\n\x1b[2m[programa encerrado, código ${mensagem.codigo}]\x1b[0m\r\n`);
+      desenharAbas(rotaAtual().id);
+    }
+    // A guarda comparou quando o programa terminou: se algo mudou, mostra o aviso da sessão.
+    if (mensagem.tipo === "guarda" && mensagem.mudancas.length > 0 && rotaAtual().id === t.sessao) verificarGuarda();
+  });
+  ws.addEventListener("close", () => {
+    if (t.rodando && terminais.has(t.id)) {
+      t.desconectado = true;
+      desenharAbas(rotaAtual().id);
+    }
+  });
+}
+
+function enviar(t, mensagem) {
+  if (t.ws?.readyState === WebSocket.OPEN) t.ws.send(JSON.stringify(mensagem));
+}
+
+// Ajusta o terminal ao espaço da tela e avisa o programa do novo tamanho.
+function ajustar(t) {
+  if (t.el.hidden) return;
+  t.fit.fit();
+  enviar(t, { tipo: "tamanho", colunas: t.term.cols, linhas: t.term.rows });
+}
+
+window.addEventListener("resize", () => {
+  const ativo = terminais.get(terminalAtivo);
+  if (ativo) ajustar(ativo);
+});
+
+// Ctrl+C com texto selecionado copia; sem seleção, vai para o programa (interromper).
+// Ctrl+V fica com o navegador, que cola, e o xterm manda o texto colado para o programa.
+function teclaEspecial(t, evento) {
+  if (evento.type !== "keydown" || !(evento.ctrlKey || evento.metaKey)) return true;
+  const tecla = evento.key.toLowerCase();
+  if (tecla === "c" && t.term.hasSelection()) {
+    navigator.clipboard.writeText(t.term.getSelection()).catch(() => {});
+    t.term.clearSelection();
+    return false;
+  }
+  if (tecla === "v") return false;
+  return true;
+}
+
+function desenharAbas(sessaoId) {
+  const daSessao = [...terminais.values()].filter((t) => t.sessao === sessaoId);
+  if (!daSessao.some((t) => t.id === terminalAtivo)) terminalAtivo = daSessao.at(-1)?.id ?? null;
+  for (const t of terminais.values()) t.el.hidden = t.id !== terminalAtivo;
+
+  const abas = $("abas-terminal");
+  abas.replaceChildren();
+  daSessao.forEach((t, indice) => {
+    const aba = document.createElement("div");
+    aba.className = t.rodando ? "aba" : "aba encerrado";
+    aba.setAttribute("role", "tab");
+    aba.setAttribute("aria-selected", String(t.id === terminalAtivo));
+
+    const nome = document.createElement("button");
+    nome.type = "button";
+    const estado = document.createElement("span");
+    estado.className = "estado";
+    estado.textContent = !t.rodando
+      ? ` · encerrado (código ${t.codigo})`
+      : t.desconectado
+        ? " · desconectado"
+        : " · rodando";
+    nome.append(`Terminal ${indice + 1}`, estado);
+    nome.addEventListener("click", () => {
+      terminalAtivo = t.id;
+      desenharAbas(sessaoId);
+      t.term.focus();
+    });
+
+    const fechar = document.createElement("button");
+    fechar.type = "button";
+    fechar.className = "fechar";
+    fechar.textContent = "×";
+    fechar.title = t.rodando ? "Fechar: encerra o programa" : "Fechar";
+    fechar.addEventListener("click", () => {
+      // Com o programa rodando, fechar encerra a conversa com a IA: pede um segundo clique.
+      if (t.rodando && fechar.textContent === "×") {
+        fechar.textContent = "encerrar?";
+        setTimeout(() => (fechar.textContent = "×"), 3000);
+        return;
+      }
+      fecharTerminal(t);
+    });
+
+    aba.append(nome, fechar);
+    abas.append(aba);
+  });
+
+  const ativo = terminais.get(terminalAtivo);
+  if (ativo) requestAnimationFrame(() => ajustar(ativo));
+}
+
+async function fecharTerminal(t) {
+  try {
+    await api(`/api/terminais/${t.id}`, { method: "DELETE" });
+  } catch {
+    // O servidor já não tinha esse terminal: só tira da tela.
+  }
+  t.ws?.close();
+  t.term.dispose();
+  t.el.remove();
+  terminais.delete(t.id);
+  if (terminalAtivo === t.id) terminalAtivo = null;
+  desenharAbas(rotaAtual().id);
+}
+
+$("abrir-terminal").addEventListener("click", async () => {
+  const sessaoId = rotaAtual().id;
+  const botao = $("abrir-terminal");
+  botao.disabled = true;
+  avisoTerminal(null);
+  try {
+    // Só o id da sessão: qual programa roda é decidido pelo lore-pack.config.json, no servidor.
+    const { id } = await api(`/api/sessoes/${encodeURIComponent(sessaoId)}/terminais`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    const t = await criarTerminal(id, sessaoId);
+    terminalAtivo = id;
+    desenharAbas(sessaoId);
+    t.term.focus();
+  } catch (erro) {
+    avisoTerminal(erro.message);
   } finally {
     botao.disabled = false;
   }

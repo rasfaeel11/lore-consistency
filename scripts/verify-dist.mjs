@@ -4,6 +4,7 @@
 // 3. O pacote do npm (campo "files") leva tudo isso junto.
 import { execSync, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
+import { createRequire } from "node:module";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -27,9 +28,18 @@ for (const command of COMMANDS) {
 }
 
 const { WEB_DIR, TEMPLATES_DIR, INSTRUCTIONS_DIR } = await import(dist("cli/paths.js"));
-const { WEB_FILES } = await import(dist("server/app.js"));
+const { WEB_FILES, VENDOR_FILES } = await import(dist("server/app.js"));
 for (const file of WEB_FILES) {
   if (!existsSync(join(WEB_DIR, file))) problems.push(`Falta ${join(WEB_DIR, file)}, que o servidor serve.`);
+}
+// Os arquivos do xterm vêm das dependências: confere que elas resolvem a partir do dist/.
+const requireFromDist = createRequire(dist("server/app.js"));
+for (const { module } of Object.values(VENDOR_FILES)) {
+  try {
+    requireFromDist.resolve(module);
+  } catch {
+    problems.push(`Não achei ${module}, que o servidor entrega para o terminal. Rode "npm install".`);
+  }
 }
 if (!existsSync(join(TEMPLATES_DIR, "biblia.md"))) problems.push(`Falta ${TEMPLATES_DIR}, que o init copia.`);
 if (!existsSync(join(INSTRUCTIONS_DIR, "instrucoes-ia.md"))) problems.push(`Falta ${INSTRUCTIONS_DIR}, que o init grava.`);

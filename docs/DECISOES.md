@@ -239,3 +239,23 @@ Conferidas no registro do npm em 2026-10-02. Todas MIT.
 
 ### Peculiaridade do Windows (ConPTY), vista nos testes
 Um processo que espera entrada **sem ter escrito nada na tela** não recebe a digitação. Com qualquer saída antes (um prompt, uma tela), funciona. Uma IA de terminal sempre desenha antes de ler, e no navegador o xterm.js responde às consultas do console, então não afeta o uso real. Os scripts de teste imprimem algo antes de ler.
+
+## 2026-10-02: terminal embutido, front (M4b, parte 3)
+
+- **xterm servido de `node_modules`** por três rotas fixas (`/vendor/xterm.mjs`, `/vendor/xterm.css`, `/vendor/addon-fit.mjs`), resolvidas com `require.resolve`. Os pacotes trazem `.mjs` sem nenhum `import`, então o navegador carrega direto, sem build e sem cópia. Ficam sem token, como o `app.js`, porque não têm dado da história. O `verify:dist` confere que eles resolvem a partir do `dist/`. Continua sem bundler: a página ganhou cerca de 250 linhas de JS puro, e não compensou rever a decisão do M4a.
+- **O xterm é carregado com `import()` só ao abrir uma sessão.** Quem não usa o terminal não baixa os 340 KB.
+- **Layout:** na tela da sessão, as informações (comando, copiar pacote, guarda, plano, apagar) ficam à esquerda, e o terminal à direita, fixo ao rolar. A barra lateral continua. Abaixo de 1100 px de largura, vira uma coluna só. O "Copiar pacote" fica sempre na tela, com o terminal ligado ou não.
+- **Abas:** uma por terminal da sessão, com "rodando", "desconectado" ou "encerrado (código N)". Trocar de sessão só esconde a tela, e o programa continua rodando. Recarregar a página recria as abas pela lista do servidor e reanexa.
+  - Fechar a aba de um terminal **rodando** pede um segundo clique ("encerrar?"), porque mata a conversa com a IA.
+- **Copiar e colar:** Ctrl+C com texto selecionado copia; sem seleção, vai para o programa (interromper, como em qualquer terminal). Ctrl+V fica com o navegador, que cola, e o xterm manda o texto. Escrito embaixo do terminal.
+- **Tamanho:** o FitAddon ajusta o terminal ao espaço ao abrir, ao trocar de aba e ao redimensionar a janela. Cada mudança vai ao programa como `tamanho`.
+- **Quando o programa termina,** a guarda compara. Se algo mudou e a sessão está na tela, o aviso da guarda aparece sozinho, com diff, Reverter e Manter.
+- **Não apagar sessão com terminal rodando** (409): a IA continuaria escrevendo numa pasta que não existe mais, sem guarda.
+- **Verificado num navegador de verdade:** Chrome headless controlado pelo protocolo de depuração, com uma história de demonstração e o `cmd.exe` como "IA". Conferido:
+  - abre na pasta da história;
+  - digitar `echo` mostra a resposta;
+  - recarregar reanexa com o histórico;
+  - `exit 7` mostra "encerrado (código 7)";
+  - fechar a aba tira o terminal do servidor;
+  - com `"nenhum"`, o botão fica desabilitado e o motivo aparece.
+  - O único erro no console era o `favicon.ico` 404, silenciado com `<link rel="icon" href="data:,">`. O script era temporário e não ficou no repositório.

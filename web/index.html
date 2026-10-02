@@ -4,6 +4,9 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>lore-pack</title>
+    <!-- Sem ícone: evita o pedido de /favicon.ico, que daria 404. -->
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/vendor/xterm.css" />
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
@@ -58,51 +61,65 @@
       </section>
 
       <section id="sessao" hidden>
-        <p class="marca" id="sessao-capitulo"></p>
-        <h2 id="sessao-id"></h2>
-        <p id="sessao-meta"></p>
-        <pre id="sessao-resumo-pack" class="resumo" hidden></pre>
+        <div class="sessao-info">
+          <p class="marca" id="sessao-capitulo"></p>
+          <h2 id="sessao-id"></h2>
+          <p id="sessao-meta"></p>
+          <pre id="sessao-resumo-pack" class="resumo" hidden></pre>
 
-        <h3>Começar</h3>
-        <p>No Claude Code, abra o terminal na pasta da história e rode:</p>
-        <div class="linha-comando">
-          <code id="sessao-comando"></code>
-          <button id="copiar-comando" type="button">Copiar comando</button>
-        </div>
-        <p>Com outra IA, copie o pacote e cole na conversa.</p>
-        <button id="copiar-pacote" type="button">Copiar pacote</button>
-        <span id="copiado" class="dica" role="status"></span>
-
-        <h3>Guarda do cânone</h3>
-        <p class="dica">
-          Acusa mudanças na bíblia, estado, alfabeto, fichas, referências e capítulos desde que a sessão começou.
-          É detecção depois do fato: não impede ninguém de escrever.
-        </p>
-        <button id="verificar" type="button">Verificar alterações</button>
-        <button id="vigiar" type="button" hidden>Começar a vigiar</button>
-        <p id="guarda-status" role="status"></p>
-        <div id="guarda-alerta" class="alerta" hidden>
-          <p id="guarda-titulo"></p>
-          <div id="guarda-lista"></div>
-          <div class="acoes">
-            <button id="reverter" type="button">Reverter tudo</button>
-            <button id="confirmar-reverter" type="button" class="perigo" hidden></button>
-            <button id="cancelar-reverter" type="button" hidden>Cancelar</button>
-            <button id="manter" type="button">Manter e registrar</button>
+          <h3>Começar</h3>
+          <p>Clique em "Abrir terminal", ao lado, ou rode no seu próprio terminal, na pasta da história:</p>
+          <div class="linha-comando">
+            <code id="sessao-comando"></code>
+            <button id="copiar-comando" type="button">Copiar comando</button>
           </div>
+          <p>Com outra IA, copie o pacote e cole na conversa.</p>
+          <button id="copiar-pacote" type="button">Copiar pacote</button>
+          <span id="copiado" class="dica" role="status"></span>
+
+          <h3>Guarda do cânone</h3>
+          <p class="dica">
+            Acusa mudanças na bíblia, estado, alfabeto, fichas, referências e capítulos desde que a sessão começou.
+            É detecção depois do fato: não impede ninguém de escrever.
+          </p>
+          <button id="verificar" type="button">Verificar alterações</button>
+          <button id="vigiar" type="button" hidden>Começar a vigiar</button>
+          <p id="guarda-status" role="status"></p>
+          <div id="guarda-alerta" class="alerta" hidden>
+            <p id="guarda-titulo"></p>
+            <div id="guarda-lista"></div>
+            <div class="acoes">
+              <button id="reverter" type="button">Reverter tudo</button>
+              <button id="confirmar-reverter" type="button" class="perigo" hidden></button>
+              <button id="cancelar-reverter" type="button" hidden>Cancelar</button>
+              <button id="manter" type="button">Manter e registrar</button>
+            </div>
+          </div>
+
+          <h3>sessao.md</h3>
+          <pre id="sessao-corpo"></pre>
+
+          <h3>Apagar sessão</h3>
+          <p class="dica">Apaga a pasta da sessão (plano, pacote, fechamento e rascunhos) e o snapshot dela. Não dá para desfazer.</p>
+          <div class="acoes">
+            <button id="apagar" type="button">Apagar sessão</button>
+            <button id="confirmar-apagar" type="button" class="perigo" hidden>Confirmar: apagar esta sessão</button>
+            <button id="cancelar-apagar" type="button" hidden>Cancelar</button>
+          </div>
+          <p id="apagar-status" role="status"></p>
         </div>
 
-        <h3>sessao.md</h3>
-        <pre id="sessao-corpo"></pre>
-
-        <h3>Apagar sessão</h3>
-        <p class="dica">Apaga a pasta da sessão (plano, pacote, fechamento e rascunhos) e o snapshot dela. Não dá para desfazer.</p>
-        <div class="acoes">
-          <button id="apagar" type="button">Apagar sessão</button>
-          <button id="confirmar-apagar" type="button" class="perigo" hidden>Confirmar: apagar esta sessão</button>
-          <button id="cancelar-apagar" type="button" hidden>Cancelar</button>
+        <div id="painel-terminal">
+          <div class="terminal-barra">
+            <div id="abas-terminal" role="tablist" aria-label="Terminais desta sessão"></div>
+            <button id="abrir-terminal" type="button">Abrir terminal</button>
+          </div>
+          <p id="terminal-aviso" class="dica" role="status" hidden></p>
+          <div id="terminais"></div>
+          <p class="dica">
+            Copiar: selecione e aperte Ctrl+C (sem seleção, o Ctrl+C vai para o programa). Colar: Ctrl+V.
+          </p>
         </div>
-        <p id="apagar-status" role="status"></p>
       </section>
     </main>
 

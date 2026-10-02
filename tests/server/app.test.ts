@@ -86,6 +86,20 @@ describe("servidor do app", () => {
     expect((await fetch(`${base}/style.css`)).headers.get("content-type")).toContain("text/css");
   });
 
+  it("serve os arquivos do xterm direto do node_modules, sem token", async () => {
+    const script = await globalThis.fetch(`${base}/vendor/xterm.mjs`);
+    expect(script.status).toBe(200);
+    expect(script.headers.get("content-type")).toContain("javascript");
+    expect(await script.text()).toContain("Terminal");
+
+    const fit = await globalThis.fetch(`${base}/vendor/addon-fit.mjs`);
+    expect(fit.status).toBe(200);
+    expect(await fit.text()).toContain("FitAddon");
+
+    expect((await globalThis.fetch(`${base}/vendor/xterm.css`)).headers.get("content-type")).toContain("text/css");
+    expect((await globalThis.fetch(`${base}/vendor/../package.json`)).status).toBe(404);
+  });
+
   it("caminho desconhecido dá 404", async () => {
     expect((await fetch(`${base}/../package.json`)).status).toBe(404);
     expect((await fetch(`${base}/api/nada`)).status).toBe(404);
