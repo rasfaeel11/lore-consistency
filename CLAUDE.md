@@ -6,7 +6,7 @@ Ferramenta para quem escreve histórias com ajuda de IA. Organiza o mundo da his
 
 ## Status atual
 
-- Marco em andamento: **M4a.1** (referências, tipos novos, segredos, instruções para a IA)
+- Marco em andamento: **M4b** (terminal embutido)
 - Atualize esta linha ao fechar cada marco.
 
 ## Roteiro
@@ -18,7 +18,7 @@ Ferramenta para quem escreve histórias com ajuda de IA. Organiza o mundo da his
 | M2 | `pack` |
 | M3 | Sessões e capítulos |
 | M4a | App local: servidor, barra lateral, nova sessão |
-| M4a.1 | Referências por tema, tipos `povo` e `conceito`, regra de segredos no prompt, CLAUDE.md/AGENTS.md na pasta da história |
+| M4a.1 | Referências por tema, tipos `povo` e `conceito`, regra de segredos no prompt |
 | M4b | Terminal embutido |
 | M5 | `apply` (aprovação do fechamento) |
 | M6 | Publicação |
