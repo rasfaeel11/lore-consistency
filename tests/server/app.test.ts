@@ -9,6 +9,16 @@ import { createAppServer, listen } from "../../src/server/app.js";
 
 const HISTORIA = fileURLToPath(new URL("../fixtures/sessoes/historia", import.meta.url));
 const OPEN = "2026-09-30-cap-02-02";
+const TOKEN = "token-de-teste";
+
+// Todo pedido dos testes leva o token no cabeçalho, como a página faz.
+// Os testes que querem ver a recusa usam globalThis.fetch direto.
+function fetch(url: string, init: RequestInit = {}) {
+  return globalThis.fetch(url, {
+    ...init,
+    headers: { "X-Lore-Pack-Token": TOKEN, ...(init.headers as Record<string, string> | undefined) },
+  });
+}
 
 describe("servidor do app", () => {
   let tempDir: string;
@@ -20,7 +30,7 @@ describe("servidor do app", () => {
     tempDir = mkdtempSync(join(tmpdir(), "lore-pack-"));
     story = join(tempDir, "historia");
     cpSync(HISTORIA, story, { recursive: true });
-    server = createAppServer(story);
+    server = createAppServer(story, TOKEN);
     base = await listen(server, 0);
   });
 
@@ -52,7 +62,7 @@ describe("servidor do app", () => {
   // O fetch não deixa trocar o Host; o http.request deixa.
   function rawGet(path: string, headers: Record<string, string>): Promise<number> {
     return new Promise((resolve, reject) => {
-      const req = request({ host: "127.0.0.1", port: port(), path, headers }, (res) => {
+      const req = request({ host: "127.0.0.1", port: port(), path, headers: { "X-Lore-Pack-Token": TOKEN, ...headers } }, (res) => {
         res.resume();
         resolve(res.statusCode ?? 0);
       });
@@ -67,7 +77,7 @@ describe("servidor do app", () => {
   });
 
   it("serve a página, o script e o estilo", async () => {
-    const page = await fetch(`${base}/`);
+    const page = await fetch(`${base}/?token=${TOKEN}`);
     expect(page.status).toBe(200);
     expect(page.headers.get("content-type")).toContain("text/html");
     expect(await page.text()).toContain("lore-pack");
@@ -79,6 +89,32 @@ describe("servidor do app", () => {
   it("caminho desconhecido dá 404", async () => {
     expect((await fetch(`${base}/../package.json`)).status).toBe(404);
     expect((await fetch(`${base}/api/nada`)).status).toBe(404);
+  });
+
+  describe("token", () => {
+    it("a página sem token, ou com token errado, dá 401", async () => {
+      const semToken = await globalThis.fetch(`${base}/`);
+      expect(semToken.status).toBe(401);
+      expect(await semToken.text()).toContain("lore-pack ui");
+
+      expect((await globalThis.fetch(`${base}/?token=errado`)).status).toBe(401);
+    });
+
+    it("o script e o estilo não precisam de token (não têm dado da história)", async () => {
+      expect((await globalThis.fetch(`${base}/app.js`)).status).toBe(200);
+      expect((await globalThis.fetch(`${base}/style.css`)).status).toBe(200);
+    });
+
+    it("a API sem o cabeçalho do token dá 401", async () => {
+      const response = await globalThis.fetch(`${base}/api/historia`);
+
+      expect(response.status).toBe(401);
+      expect((await response.json()).erro).toContain("lore-pack ui");
+    });
+
+    it("token na URL não vale para a API (só o cabeçalho)", async () => {
+      expect((await globalThis.fetch(`${base}/api/historia?token=${TOKEN}`)).status).toBe(401);
+    });
   });
 
   describe("GET /api/historia", () => {

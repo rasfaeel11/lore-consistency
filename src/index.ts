@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { readFileSync } from "node:fs";
-import { ui } from "./cli/ui.js";
+import { findCommand } from "./cli/commands.js";
 import { main } from "./cli/main.js";
 
 // O package.json fica um nível acima tanto de src/ (dev) quanto de dist/ (build).
@@ -11,8 +11,9 @@ const { version } = JSON.parse(readFileSync(packageJsonUrl, "utf8")) as {
 
 try {
   const args = process.argv.slice(2);
-  // O app deixa um servidor rodando, então é o único comando assíncrono.
-  const result = args[0] === "ui" ? (await ui(args.slice(1))).result : main(args, version);
+  // Comandos assíncronos (o ui deixa um servidor rodando) ficam fora do main, mas vêm da mesma lista.
+  const command = findCommand(args[0]);
+  const result = command && "runAsync" in command ? await command.runAsync(args.slice(1)) : main(args, version);
   if (result.stdout) process.stdout.write(result.stdout);
   if (result.stderr) process.stderr.write(result.stderr);
   process.exitCode = result.exitCode;

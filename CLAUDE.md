@@ -42,11 +42,12 @@ Fora do escopo até a v1: chamar API de IA, contas de usuário, hospedagem onlin
 ```
 src/
   core/        # funções puras: schemas da ficha e da sessão, validação, montagem do pacote, capítulos, sessões e guarda do cânone
-  cli/         # comandos: init, check, pack, capitulo, sessao, ui. Lê e escreve arquivos.
+  cli/         # comandos (lista única em commands.ts): init, check, pack, capitulo, sessao, ui. Lê e escreve arquivos.
   server/      # servidor do app local (node:http, só 127.0.0.1). Usa o núcleo e as funções da CLI.
   index.ts     # ponto de entrada da CLI
 web/           # página do app: HTML, CSS e JS puro, servidos pelo server/
 templates/     # o que o `init` copia para a pasta da história
+scripts/       # scripts do build: limpar o dist/ e conferir o build (verify:dist)
 tests/
   fixtures/    # pastas de história de teste (válidas e inválidas)
 docs/

@@ -7,8 +7,15 @@ let historia = { nome: "", capitulos: [], referencias: [], erros: 0 };
 // Resumo do pack logo depois de criar uma sessão, para mostrar uma vez.
 let ultimoResumo = null;
 
+// O token vem no endereço que o "lore-pack ui" imprimiu. Vai no cabeçalho de todo pedido à API.
+const TOKEN = new URLSearchParams(location.search).get("token") ?? "";
+
+function pedir(caminho, opcoes = {}) {
+  return fetch(caminho, { ...opcoes, headers: { ...opcoes.headers, "X-Lore-Pack-Token": TOKEN } });
+}
+
 async function api(caminho, opcoes) {
-  const resposta = await fetch(caminho, opcoes);
+  const resposta = await pedir(caminho, opcoes);
   const dados = await resposta.json();
   if (!resposta.ok) throw new Error(dados.erro ?? `Erro ${resposta.status}`);
   return dados;
@@ -262,7 +269,7 @@ $("copiar-comando").addEventListener("click", () => copiar($("sessao-comando").t
 
 $("copiar-pacote").addEventListener("click", async () => {
   const id = rotaAtual().id;
-  const resposta = await fetch(`/api/sessoes/${encodeURIComponent(id)}/pacote`);
+  const resposta = await pedir(`/api/sessoes/${encodeURIComponent(id)}/pacote`);
   if (!resposta.ok) {
     $("copiado").textContent = "Não achei o pacote.md desta sessão.";
     return;

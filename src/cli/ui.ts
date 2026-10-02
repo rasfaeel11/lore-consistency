@@ -1,7 +1,9 @@
+import { randomBytes } from "node:crypto";
 import type { Server } from "node:http";
 import { basename } from "node:path";
 import { parseArgs } from "node:util";
 import { createAppServer, listen } from "../server/app.js";
+import { openBrowser } from "./open-browser.js";
 import { fail, ok, type CliResult } from "./result.js";
 import { findStoryRoot } from "./story-files.js";
 
@@ -12,6 +14,7 @@ const USAGE = `Uso:
 
 Abre o app da história no navegador: capítulos e sessões na barra lateral,
 e um formulário para criar sessão nova. Só funciona neste computador (127.0.0.1).
+O endereço leva um token novo a cada vez; sem ele, o app não responde.
 
 Opções:
   --porta <número>   porta do servidor (padrão: ${DEFAULT_PORT})
@@ -20,7 +23,11 @@ Opções:
 
 // Diferente dos outros comandos, este deixa um servidor rodando. O server volta junto
 // para quem chamou poder fechá-lo (os testes fecham; a CLI deixa aberto até o Ctrl+C).
-export async function ui(args: string[]): Promise<{ result: CliResult; server?: Server }> {
+// open abre o navegador; os testes passam uma função que só anota o endereço.
+export async function ui(
+  args: string[],
+  open: (url: string) => void = openBrowser,
+): Promise<{ result: CliResult; server?: Server }> {
   let parsed;
   try {
     parsed = parseArgs({
@@ -43,10 +50,12 @@ export async function ui(args: string[]): Promise<{ result: CliResult; server?: 
   const story = findStoryRoot(parsed.positionals[0] ?? ".");
   if (!story.ok) return { result: fail(story.error) };
 
-  const server = createAppServer(story.root);
-  let url;
+  // Segredo de uso único: só quem viu o endereço impresso (ou aberto no navegador) entra.
+  const token = randomBytes(24).toString("base64url");
+  const server = createAppServer(story.root, token);
+  let base;
   try {
-    url = await listen(server, port);
+    base = await listen(server, port);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "EADDRINUSE") {
       return {
@@ -56,10 +65,13 @@ export async function ui(args: string[]): Promise<{ result: CliResult; server?: 
     throw error;
   }
 
+  const url = `${base}/?token=${token}`;
+  open(url);
   return {
     server,
-    result: ok(`App da história "${basename(story.root)}" aberto em ${url}
-Abra esse endereço no navegador. Para encerrar, aperte Ctrl+C aqui no terminal.
+    result: ok(`App da história "${basename(story.root)}" aberto em:
+  ${url}
+Se o navegador não abrir sozinho, copie esse endereço (com o token). Para encerrar, aperte Ctrl+C aqui no terminal.
 `),
   };
 }

@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -15,19 +16,26 @@ import { isFile, readStoryFiles, readText } from "../cli/story-files.js";
 const HOST = "127.0.0.1";
 const MAX_BODY_BYTES = 1_000_000;
 
+// A página manda o token neste cabeçalho em todo pedido à API.
+export const TOKEN_HEADER = "x-lore-pack-token";
+
 // Só estes arquivos são servidos. Lista fechada: nenhum caminho vindo do navegador vira caminho no disco.
+// A página exige o token na URL; o script e o estilo não têm dado da história e ficam abertos.
+const PAGE = { file: "index.html", type: "text/html; charset=utf-8" };
 const STATIC_FILES: Record<string, { file: string; type: string }> = {
-  "/": { file: "index.html", type: "text/html; charset=utf-8" },
   "/app.js": { file: "app.js", type: "text/javascript; charset=utf-8" },
   "/style.css": { file: "style.css", type: "text/css; charset=utf-8" },
 };
 
+// Usado pelo verify:dist para conferir que o build tem tudo o que o servidor serve.
+export const WEB_FILES = [PAGE.file, ...Object.values(STATIC_FILES).map((entry) => entry.file)];
+
 const SESSION_ROUTE = /^\/api\/sessoes\/([^/]+)(\/pacote)?$/;
 const GUARD_ROUTE = /^\/api\/sessoes\/([^/]+)\/guarda(?:\/(vigiar|reverter|manter))?$/;
 
-export function createAppServer(root: string): Server {
+export function createAppServer(root: string, token: string): Server {
   const server = createServer((req, res) => {
-    handle(root, server, req, res).catch((error: unknown) => {
+    handle(root, token, server, req, res).catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error);
       sendJson(res, 500, { erro: `Erro inesperado: ${message}` });
     });
@@ -47,7 +55,13 @@ export function listen(server: Server, port: number): Promise<string> {
   });
 }
 
-async function handle(root: string, server: Server, req: IncomingMessage, res: ServerResponse): Promise<void> {
+async function handle(
+  root: string,
+  token: string,
+  server: Server,
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<void> {
   // Um site aberto no navegador pode tentar falar com o app. Recusamos se o Host
   // (truque de "DNS rebinding") ou a Origin não forem deste computador e desta porta.
   const { port } = server.address() as AddressInfo;
@@ -60,14 +74,26 @@ async function handle(root: string, server: Server, req: IncomingMessage, res: S
     return sendJson(res, 403, { erro: "Pedido vindo de outro site foi recusado." });
   }
 
-  const path = new URL(req.url ?? "/", `http://${HOST}`).pathname;
+  const url = new URL(req.url ?? "/", `http://${HOST}`);
+  const path = url.pathname;
   const method = req.method ?? "GET";
 
   const staticFile = STATIC_FILES[path];
-  if (method === "GET" && staticFile) {
-    res.writeHead(200, { "Content-Type": staticFile.type, "Cache-Control": "no-store" });
-    res.end(readFileSync(join(WEB_DIR, staticFile.file)));
-    return;
+  if (method === "GET" && staticFile) return sendFile(res, staticFile);
+
+  // Sem o token, outro programa ou outro usuário deste computador não usa o app.
+  if (method === "GET" && path === "/") {
+    if (!sameToken(url.searchParams.get("token"), token)) {
+      res.writeHead(401, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" });
+      res.end('Falta o token. Abra o endereço completo que o "lore-pack ui" imprimiu no terminal.\n');
+      return;
+    }
+    return sendFile(res, PAGE);
+  }
+  if (path.startsWith("/api/") && !sameToken(headerValue(req.headers[TOKEN_HEADER]), token)) {
+    return sendJson(res, 401, {
+      erro: 'Falta o token. Abra o endereço completo que o "lore-pack ui" imprimiu no terminal.',
+    });
   }
 
   if (method === "GET" && path === "/api/historia") return sendJson(res, 200, storySummary(root));
@@ -195,6 +221,23 @@ function postGuard(root: string, id: string, action: string, res: ServerResponse
   }
   const changes = action === "reverter" ? revertChanges(root, id) : keepChanges(root, id);
   sendJson(res, 200, { arquivos: changes.map((change) => ({ arquivo: change.path, tipo: change.kind })) });
+}
+
+function sendFile(res: ServerResponse, entry: { file: string; type: string }): void {
+  res.writeHead(200, { "Content-Type": entry.type, "Cache-Control": "no-store" });
+  res.end(readFileSync(join(WEB_DIR, entry.file)));
+}
+
+// Compara em tempo constante, para o tempo de resposta não dar pistas do token.
+function sameToken(received: string | null | undefined, expected: string): boolean {
+  if (typeof received !== "string") return false;
+  const a = Buffer.from(received);
+  const b = Buffer.from(expected);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+function headerValue(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
 }
 
 // Formulários de outros sites não conseguem mandar application/json sem a permissão do servidor (CORS).
