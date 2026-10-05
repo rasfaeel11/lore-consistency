@@ -41,12 +41,12 @@ Fora do escopo até a v1: chamar API de IA, contas de usuário, hospedagem onlin
 
 ```
 src/
-  core/        # funções puras: schemas da ficha e da sessão, validação, montagem do pacote, capítulos, sessões e guarda do cânone
-  cli/         # comandos (lista única em commands.ts): init, check, pack, capitulo, sessao, ui. Lê e escreve arquivos.
-  server/      # servidor do app local (node:http + ws, só 127.0.0.1) e terminal embutido (node-pty opcional). Usa o núcleo e as funções da CLI.
+  core/        # funções puras: schemas da ficha e da sessão, validação, montagem do pacote, capítulos, sessões, guarda do cânone e configuração do terminal (terminal-config.ts)
+  cli/         # comandos (lista única em commands.ts): init, check, pack, capitulo, sessao, atualizar-instrucoes, ui. Lê e escreve arquivos. Também: guard.ts (snapshot da guarda), instrucoes.ts (CLAUDE.md/AGENTS.md da história) e open-browser.ts.
+  server/      # servidor do app local (app.ts: node:http + ws, só 127.0.0.1) e terminal embutido (terminal.ts: terminais e WebSocket, node-pty opcional; command.ts: acha o comando no PATH). Usa o núcleo e as funções da CLI.
   index.ts     # ponto de entrada da CLI
 web/           # página do app: HTML, CSS e JS puro, servidos pelo server/
-templates/     # o que o `init` copia para a pasta da história
+templates/     # o que o `init` copia para a pasta da história (inclui o lore-pack.config.json)
 instrucoes/    # texto do CLAUDE.md/AGENTS.md e o .claude/settings.json que o `init` grava na história
 scripts/       # scripts do build: limpar o dist/ e conferir o build (verify:dist)
 tests/
@@ -55,7 +55,12 @@ docs/
   DECISOES.md  # diário de decisões
   V2.md        # ideias adiadas
   CHECKLIST-M4b.md # teste manual do terminal e da guarda com o Claude Code de verdade
-  prompts-dev/ # prompts para construir o projeto com o Claude Code (não são do produto)
+  prompts-dev/ # prompts que não são do produto. O LEIAME.md é o índice.
+    1-lore-pack/dev/               # prompts de marco, para construir o projeto com o Claude Code
+    1-lore-pack/sessao-de-escrita/ # versão original dos modelos de prompt de sessão
+    2-fluxo-manual-original/       # o fluxo manual de antes do lore-pack (referência)
+    3-lore-checker-arquivado/      # projeto anterior, arquivado
+.github/workflows/ci.yml # CI: typecheck, testes, build e verify:dist
 ```
 
 ## Formato da ficha
@@ -83,7 +88,9 @@ Cânone organizado por tema (magia, combate, política...), em `referencias/<id>
 ## Capítulos e sessões
 
 - Capítulo: `capitulos/cap-NN.md`. Título = primeiro cabeçalho `# `; sem ele, o nome do arquivo.
-- Sessão: pasta `sessoes/<id>/` com `sessao.md`, `pacote.md` e, depois de fechada, `fechamento.md`. Id `data-capítulo-sequência` (`2026-10-01-cap-03-01`), igual ao nome da pasta. Se o autor mantiver alterações diretas em arquivos protegidos, elas ficam registradas em `alteracoes-diretas.md`.
+- Sessão: pasta `sessoes/<id>/` com `sessao.md` e `pacote.md`. Id `data-capítulo-sequência` (`2026-10-01-cap-03-01`), igual ao nome da pasta.
+- `sessoes/<id>/fechamento.md`: as propostas de mudança. A IA escreve esse arquivo com a sessão ainda **aberta** (é o que o `buildStartPrompt` e o bloco de arquivos do pacote pedem). O `sessao fechar --fechamento <arquivo>` só copia um arquivo para lá, e recusa se ele já existir.
+- `sessoes/<id>/alteracoes-diretas.md`: gerado pelo "Manter" da guarda (`sessao verificar --manter` ou o botão do app), com as alterações diretas em arquivos protegidos que o autor decidiu manter.
 - Guarda do cânone: ao criar a sessão, o lore-pack copia os arquivos protegidos (`biblia.md`, `estado.md`, `alfabeto.md`, `fichas/`, `referencias/`, `capitulos/`, mais `CLAUDE.md`, `AGENTS.md`, `.claude/settings.json` e `lore-pack.config.json`) para `.lore-pack/snapshots/<id>/`, pasta fora do git e ignorada pelo `check`. `sessao verificar` e o app comparam com o snapshot; `sessao fechar` recusa enquanto houver mudança não resolvida. É detecção depois do fato, não bloqueio.
 - Cabeçalho do `sessao.md`: `id`, `capitulo` (precisa existir em `capitulos/`), `criada_em` (ISO), `status` (`aberta` | `fechada`), `fechada_em` (obrigatório se fechada). Corpo: `## Plano` e, depois de fechada, `## Resumo` opcional.
 
