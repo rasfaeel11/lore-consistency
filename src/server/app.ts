@@ -1,18 +1,20 @@
 import { timingSafeEqual } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import type { Duplex } from "node:stream";
 import { WebSocketServer } from "ws";
 import { basename, join } from "node:path";
+import { buildFixPrompt, extractChanges } from "../core/changes.js";
 import { listChapters } from "../core/chapters.js";
 import { buildStartPrompt, isSessionId, listSessions, readSession } from "../core/session.js";
 import { readReferencias, validateStory } from "../core/validate.js";
+import { applyClosing, readClosing } from "../cli/apply.js";
 import { readPackOptions } from "../cli/pack.js";
 import { WEB_DIR } from "../cli/paths.js";
 import { checkGuard, hasSnapshot, keepChanges, revertChanges, takeSnapshot } from "../cli/guard.js";
-import { createSession, deleteSession } from "../cli/sessao.js";
+import { closeSessionFolder, createSession, deleteSession } from "../cli/sessao.js";
 import { isFile, readStoryFiles, readText } from "../cli/story-files.js";
 import { TerminalManager, loadNodePty, type PtyLoad } from "./terminal.js";
 
@@ -44,6 +46,7 @@ export const VENDOR_FILES: Record<string, { module: string; type: string }> = {
 export const WEB_FILES = [PAGE.file, ...Object.values(STATIC_FILES).map((entry) => entry.file)];
 
 const SESSION_ROUTE = /^\/api\/sessoes\/([^/]+)(\/pacote)?$/;
+const CLOSING_ROUTE = /^\/api\/sessoes\/([^/]+)\/(fechamento|fechamento\/aplicar|fechar)$/;
 const GUARD_ROUTE = /^\/api\/sessoes\/([^/]+)\/guarda(?:\/(vigiar|reverter|manter))?$/;
 const OPEN_TERMINAL_ROUTE = /^\/api\/sessoes\/([^/]+)\/terminais$/;
 const TERMINAL_ROUTE = /^\/api\/terminais\/([0-9a-f]+)$/;
@@ -191,6 +194,27 @@ async function handle(app: App, server: Server, req: IncomingMessage, res: Serve
     }
   }
 
+  // Fechamento: o navegador só diz QUAL sessão e QUAIS números da lista. O texto das operações,
+  // os caminhos e os conteúdos vêm sempre do fechamento.md lido aqui no servidor.
+  const closingMatch = CLOSING_ROUTE.exec(path);
+  if (closingMatch) {
+    const id = decodeURIComponent(closingMatch[1] ?? "");
+    const action = closingMatch[2];
+    if (!isSessionId(id) || !isFile(join(root, "sessoes", id, "sessao.md"))) {
+      return sendJson(res, 404, { erro: `A sessão "${id}" não existe em sessoes/.` });
+    }
+    if (method === "GET" && action === "fechamento") return sendJson(res, 200, closingView(root, id));
+    if (method === "POST" && action === "fechamento") return postClosing(root, id, req, res);
+    if (method === "POST" && action === "fechamento/aplicar") {
+      // A IA ainda pode estar escrevendo o fechamento.md, e o snapshot novo esconderia o que ela fizer.
+      if (app.terminals.list().some((t) => t.sessao === id && t.rodando)) {
+        return sendJson(res, 409, { erro: "Esta sessão tem um terminal rodando. Feche o terminal antes de aplicar o fechamento." });
+      }
+      return postClosingApply(root, id, req, res);
+    }
+    if (method === "POST" && action === "fechar") return postCloseSession(root, id, req, res);
+  }
+
   const match = SESSION_ROUTE.exec(path);
   if (method === "DELETE" && match && !match[2]) {
     const id = decodeURIComponent(match[1] ?? "");
@@ -253,18 +277,8 @@ function getPack(root: string, id: string, res: ServerResponse): void {
 }
 
 async function postSession(root: string, req: IncomingMessage, res: ServerResponse): Promise<void> {
-  if (!isJson(req)) return sendJson(res, 415, { erro: "Mande os dados como JSON." });
-  const text = await readBody(req);
-  if (text === undefined) return sendJson(res, 413, { erro: "Pedido grande demais." });
-
-  let body: Record<string, unknown>;
-  try {
-    const parsed: unknown = JSON.parse(text);
-    if (typeof parsed !== "object" || parsed === null) throw new Error("não é um objeto");
-    body = parsed as Record<string, unknown>;
-  } catch {
-    return sendJson(res, 400, { erro: "Os dados enviados não são um JSON válido." });
-  }
+  const body = await readJson(req, res);
+  if (!body) return;
 
   const capitulo = typeof body.capitulo === "string" ? body.capitulo : "";
   const plano = typeof body.plano === "string" ? body.plano.replace(/\r\n/g, "\n") : "";
@@ -317,6 +331,88 @@ function postGuard(root: string, id: string, action: string, res: ServerResponse
   sendJson(res, 200, { arquivos: changes.map((change) => ({ arquivo: change.path, tipo: change.kind })) });
 }
 
+// --- Fechamento: as mudanças que a IA propôs e o autor escolhe aplicar ---
+
+// O que a página mostra: o texto do fechamento.md e o que cada operação faria. Não grava nada.
+function closingView(root: string, id: string) {
+  const path = join(root, "sessoes", id, "fechamento.md");
+  if (!isFile(path)) return { existe: false, texto: null, operacoes: [], erro: null, pedidoCorrecao: null, aviso: null };
+
+  const closing = readClosing(root, id);
+  const base = { existe: true, texto: readText(path) };
+  if (!closing.ok) return { ...base, operacoes: [], erro: closing.error, pedidoCorrecao: closing.fixPrompt ?? null, aviso: null };
+  return {
+    ...base,
+    operacoes: closing.items.map((item) => ({
+      indice: item.index,
+      op: item.op,
+      titulo: item.title,
+      arquivo: item.path,
+      tipo: item.kind,
+      diff: item.diff,
+      erro: item.error ?? null,
+      aplicada: item.applied,
+    })),
+    erro: null,
+    pedidoCorrecao: null,
+    aviso: closing.replaced
+      ? "O fechamento.md mudou desde a última vez que algo foi aplicado. Ele está sendo tratado como um fechamento novo."
+      : null,
+  };
+}
+
+// Salva o texto colado como sessoes/<id>/fechamento.md. Nunca por cima de um que já existe,
+// e só se o bloco puder ser lido: um arquivo ruim salvo aqui não poderia ser trocado pela página.
+async function postClosing(root: string, id: string, req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const body = await readJson(req, res);
+  if (!body) return;
+  const text = typeof body.texto === "string" ? body.texto.replace(/\r\n/g, "\n") : "";
+  if (text.trim() === "") return sendJson(res, 400, { erro: "Cole a resposta da IA ao prompt 04-fechar-sessao antes." });
+
+  const path = join(root, "sessoes", id, "fechamento.md");
+  if (isFile(path)) {
+    return sendJson(res, 409, {
+      erro: `Já existe sessoes/${id}/fechamento.md. Para não apagar esse texto, nada foi alterado. Para usar outro, edite o arquivo.`,
+    });
+  }
+  const extracted = extractChanges(text);
+  if (!extracted.ok) return sendJson(res, 400, { erro: extracted.error, pedidoCorrecao: buildFixPrompt(extracted.error) });
+
+  writeFileSync(path, text);
+  sendJson(res, 201, closingView(root, id));
+}
+
+// O segundo clique em "Aplicar selecionadas" é a confirmação do princípio 4.
+async function postClosingApply(root: string, id: string, req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const body = await readJson(req, res);
+  if (!body) return;
+  const indices = body.indices;
+  if (!Array.isArray(indices) || indices.length === 0 || !indices.every((index) => Number.isInteger(index) && index >= 1)) {
+    return sendJson(res, 400, { erro: "Marque pelo menos uma operação da lista para aplicar." });
+  }
+
+  const applied = applyClosing(root, id, indices as number[]);
+  if (!applied.ok) return sendJson(res, 409, { erro: applied.error });
+  sendJson(res, 200, {
+    aplicadas: applied.applied,
+    arquivos: applied.written,
+    check: applied.report,
+    erros: applied.hasErrors,
+    ...closingView(root, id),
+  });
+}
+
+// Fechar é uma ação à parte do aplicar: com aplicação parcial, o autor pode querer continuar.
+async function postCloseSession(root: string, id: string, req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const body = await readJson(req, res);
+  if (!body) return;
+  const resumo = typeof body.resumo === "string" ? body.resumo.replace(/\r\n/g, "\n") : undefined;
+
+  const closed = closeSessionFolder(root, id, { resumo });
+  if (!closed.ok) return sendJson(res, 409, { erro: closed.error });
+  sendJson(res, 200, { fechada: id });
+}
+
 function sendFile(res: ServerResponse, entry: { file: string; type: string }): void {
   res.writeHead(200, { "Content-Type": entry.type, "Cache-Control": "no-store" });
   res.end(readFileSync(join(WEB_DIR, entry.file)));
@@ -348,6 +444,27 @@ function headerValue(value: string | string[] | undefined): string | undefined {
 // Formulários de outros sites não conseguem mandar application/json sem a permissão do servidor (CORS).
 function isJson(req: IncomingMessage): boolean {
   return (req.headers["content-type"] ?? "").startsWith("application/json");
+}
+
+// Lê o corpo de um POST como objeto JSON. Com problema, responde o erro e devolve undefined.
+async function readJson(req: IncomingMessage, res: ServerResponse): Promise<Record<string, unknown> | undefined> {
+  if (!isJson(req)) {
+    sendJson(res, 415, { erro: "Mande os dados como JSON." });
+    return undefined;
+  }
+  const text = await readBody(req);
+  if (text === undefined) {
+    sendJson(res, 413, { erro: "Pedido grande demais." });
+    return undefined;
+  }
+  try {
+    const parsed: unknown = JSON.parse(text);
+    if (typeof parsed !== "object" || parsed === null) throw new Error("não é um objeto");
+    return parsed as Record<string, unknown>;
+  } catch {
+    sendJson(res, 400, { erro: "Os dados enviados não são um JSON válido." });
+    return undefined;
+  }
 }
 
 // Lê o corpo do pedido. Devolve undefined se passar do limite.

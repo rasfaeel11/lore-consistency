@@ -208,43 +208,60 @@ function closeCommand(args: string[]): CliResult {
   const story = findStoryRoot(folder);
   if (!story.ok) return fail(story.error);
 
-  const sessionPath = join(story.root, "sessoes", id, "sessao.md");
-  if (!isFile(sessionPath)) {
-    return fail(`A sessão "${id}" não existe em sessoes/. Rode "lore-pack sessao listar" para ver os ids.`);
-  }
+  // Rodar o comando conta como a confirmação do princípio 4.
+  const closed = closeSessionFolder(story.root, id, { closingSource: parsed.values.fechamento, resumo: parsed.values.resumo });
+  if (!closed.ok) return fail(closed.error);
 
-  // Confere tudo antes de escrever qualquer coisa.
-  const closingSource = parsed.values.fechamento ? resolve(parsed.values.fechamento) : undefined;
-  const closingTarget = join(story.root, "sessoes", id, "fechamento.md");
-  if (closingSource && !isFile(closingSource)) {
-    return fail(`O arquivo de fechamento "${parsed.values.fechamento}" não existe. Confira o caminho do --fechamento.`);
-  }
-  if (closingSource && isFile(closingTarget)) {
-    return fail(`Já existe sessoes/${id}/fechamento.md. Para não apagar esse texto, nada foi alterado.`);
-  }
-
-  // Guarda do cânone: não fecha com alteração direta não resolvida.
-  const guard = checkGuard(story.root, id);
-  if (guard && guard.changes.length > 0) {
-    return fail(`${formatGuardReport(guard, id)}\nResolva as alterações acima antes de fechar a sessão. Nada foi alterado.`);
-  }
-
-  const closed = closeSession(readText(sessionPath), new Date().toISOString(), parsed.values.resumo);
-  if (!closed.ok) return fail(`sessoes/${id}/sessao.md: ${closed.error}`);
-
-  writeFileSync(sessionPath, closed.content);
   const lines = [`Sessão ${id} fechada.`];
-  if (closingSource) {
-    copyFileSync(closingSource, closingTarget);
-    lines.push(`Fechamento copiado para sessoes/${id}/fechamento.md.`);
-  }
+  if (closed.copied) lines.push(`Fechamento copiado para sessoes/${id}/fechamento.md.`);
   lines.push(
-    guard
+    closed.guarded
       ? "Guarda do cânone: nenhum arquivo protegido mudou durante a sessão."
       : "Guarda do cânone: sessão sem snapshot (criada antes da guarda), nada foi verificado.",
   );
-  lines.push("Aplicar as mudanças do fechamento nas fichas e no estado.md ainda é manual.");
+  lines.push(`Para aplicar as mudanças do fechamento nas fichas e no estado.md: lore-pack apply ${id}`);
   return ok(`${lines.join("\n")}\n`);
+}
+
+export type CloseSessionResult =
+  // copied: o arquivo do --fechamento foi copiado. guarded: a sessão tinha snapshot para conferir.
+  | { ok: true; copied: boolean; guarded: boolean }
+  | { ok: false; error: string };
+
+// Fecha a sessão: confere a guarda, marca o sessao.md como fechado e, se vier, copia o arquivo
+// de fechamento. Usado pelo "sessao fechar" e pelo app. Quem chama já confirmou com o autor.
+export function closeSessionFolder(
+  root: string,
+  id: string,
+  options: { closingSource?: string; resumo?: string } = {},
+): CloseSessionResult {
+  const sessionPath = join(root, "sessoes", id, "sessao.md");
+  if (!isSessionId(id) || !isFile(sessionPath)) {
+    return { ok: false, error: `A sessão "${id}" não existe em sessoes/. Rode "lore-pack sessao listar" para ver os ids.` };
+  }
+
+  // Confere tudo antes de escrever qualquer coisa.
+  const closingSource = options.closingSource ? resolve(options.closingSource) : undefined;
+  const closingTarget = join(root, "sessoes", id, "fechamento.md");
+  if (closingSource && !isFile(closingSource)) {
+    return { ok: false, error: `O arquivo de fechamento "${options.closingSource}" não existe. Confira o caminho do --fechamento.` };
+  }
+  if (closingSource && isFile(closingTarget)) {
+    return { ok: false, error: `Já existe sessoes/${id}/fechamento.md. Para não apagar esse texto, nada foi alterado.` };
+  }
+
+  // Guarda do cânone: não fecha com alteração direta não resolvida.
+  const guard = checkGuard(root, id);
+  if (guard && guard.changes.length > 0) {
+    return { ok: false, error: `${formatGuardReport(guard, id)}\nResolva as alterações acima antes de fechar a sessão. Nada foi alterado.` };
+  }
+
+  const closed = closeSession(readText(sessionPath), new Date().toISOString(), options.resumo);
+  if (!closed.ok) return { ok: false, error: `sessoes/${id}/sessao.md: ${closed.error}` };
+
+  writeFileSync(sessionPath, closed.content);
+  if (closingSource) copyFileSync(closingSource, closingTarget);
+  return { ok: true, copied: closingSource !== undefined, guarded: guard !== undefined };
 }
 
 export type DeleteSessionResult =

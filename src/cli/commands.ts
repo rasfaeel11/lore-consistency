@@ -1,4 +1,5 @@
 import { parseArgs } from "node:util";
+import { apply } from "./apply.js";
 import { capitulo } from "./capitulo.js";
 import { check } from "./check.js";
 import { init } from "./init.js";
@@ -46,6 +47,12 @@ export const COMMANDS: Command[] = [
     usage: "sessao nova | listar | fechar | verificar",
     summary: 'abre, lista, fecha e verifica sessões de escrita (veja "lore-pack sessao --help")',
     run: sessao,
+  },
+  {
+    name: "apply",
+    usage: "apply <id-da-sessão> [--aplicar <números|todas>]",
+    summary: 'mostra as mudanças do fechamento e aplica as que você escolher (veja "lore-pack apply --help")',
+    run: apply,
   },
   {
     name: "atualizar-instrucoes",

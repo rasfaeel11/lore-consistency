@@ -252,6 +252,32 @@ pre.diff .saiu {
   color: var(--erro);
 }
 
+/* Fechamento: uma mudança por bloco, com a caixa de seleção e o diff. */
+#fechamento {
+  margin-top: 12px;
+}
+
+.operacao {
+  border: 1px solid var(--borda);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin: 8px 0;
+}
+
+.operacao label.caixa,
+.operacao .titulo {
+  font-weight: 600;
+}
+
+#fechar {
+  margin-top: 16px;
+}
+
+.operacao p,
+.operacao pre {
+  margin: 6px 0 0;
+}
+
 .acoes {
   display: flex;
   flex-wrap: wrap;

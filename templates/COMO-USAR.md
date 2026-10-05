@@ -10,13 +10,14 @@ Uma pasta, arquivos curtos, uma conversa nova por capítulo. O que não está no
 - `fichas/`: uma ficha por personagem, lugar, facção, objeto, povo ou conceito (fenômeno, entidade, evento histórico). Só as fichas da cena vão no pacote.
 - `referencias/`: o cânone por tema (magia, combate, política...). Cada referência tem `palavras_chave`; ela só vai no pacote quando uma delas aparece no plano da cena, ou com `--ref`. A última cena não puxa referências.
 - `capitulos/`: o texto final de cada capítulo (`cap-01.md`, `cap-02.md`...). Só a última cena vai no pacote. Crie com `lore-pack capitulo novo "título"`.
-- `sessoes/`: uma pasta por sessão de escrita, com o plano (`sessao.md`), o pacote (`pacote.md`) e o fechamento. Crie com `lore-pack sessao nova`, veja com `lore-pack sessao listar` e feche com `lore-pack sessao fechar`.
+- `sessoes/`: uma pasta por sessão de escrita, com o plano (`sessao.md`), o pacote (`pacote.md`) e o fechamento (`fechamento.md`, a resposta da IA ao prompt 04). Crie com `lore-pack sessao nova`, veja com `lore-pack sessao listar`, aplique o fechamento com `lore-pack apply` e feche com `lore-pack sessao fechar`.
+- Aplicar o fechamento: `lore-pack apply <id>` mostra, numeradas e com o diff, as mudanças que a IA propôs; `lore-pack apply <id> --aplicar 1,3` (ou `--aplicar todas`) grava só as que você escolher. Só mexe em `estado.md`, `alfabeto.md` e fichas, e anota o que já foi aplicado em `sessoes/<id>/aplicado.json`, para não repetir. No app, é a seção "Fechamento" da sessão.
 - Guarda do cânone: quando a sessão é criada, o lore-pack guarda uma cópia da bíblia, do estado, do alfabeto, das fichas, das referências e dos capítulos (em `.lore-pack/`). Se a IA mexer direto nesses arquivos, `lore-pack sessao verificar <id>` (ou o botão "Verificar alterações" no app) mostra o que mudou, e você escolhe reverter ou manter. Ela avisa depois que aconteceu; não impede a IA de escrever.
 - `CLAUDE.md` e `AGENTS.md`: regras para a IA que trabalha nesta pasta (o que ela pode e não pode editar). `.claude/settings.json` proíbe o Claude Code de editar os arquivos protegidos. Para atualizar depois de uma versão nova do lore-pack: `lore-pack atualizar-instrucoes`.
 - `lore-pack.config.json`: qual IA o terminal do app abre. O padrão é `"comando": "claude"`, com `"args": ["{{prompt}}"]` (o `{{prompt}}` vira a instrução de início da sessão). Para outra IA, troque o comando e os argumentos. Para desligar o terminal, use `"comando": "nenhum"`: o botão de copiar o pacote continua lá.
 - `modelos/`: modelos de ficha e de referência.
 
-Prefere janela a terminal? Rode `lore-pack ui` na pasta da história. O navegador abre sozinho; se não abrir, copie o endereço completo que ele mostrar (com o `?token=`, sem ele o app não responde): capítulos e sessões na barra lateral, botões de nova sessão, de copiar o pacote e de apagar uma sessão. Só funciona no seu computador.
+Prefere janela a terminal? Rode `lore-pack ui` na pasta da história. O navegador abre sozinho; se não abrir, copie o endereço completo que ele mostrar (com o `?token=`, sem ele o app não responde): capítulos e sessões na barra lateral, botões de nova sessão, de copiar o pacote, de aplicar o fechamento, de fechar e de apagar uma sessão. Só funciona no seu computador.
 - `prompts-de-sessao/`: os prompts que você cola na IA, numerados na ordem de uso.
 
 ## O ritual de cada sessão
@@ -26,7 +27,7 @@ Prefere janela a terminal? Rode `lore-pack ui` na pasta da história. O navegado
 3. `01-planejar-capitulo`: roteiro em batidas, sem prosa.
 4. `02-escrever-cena`: uma cena por vez. Você corrige e aprova.
 5. `03-revisar-consistencia` quando quiser checar uma cena contra o pacote.
-6. `04-fechar-sessao`: gera só as mudanças nos arquivos. Você aplica e fecha a conversa.
+6. `04-fechar-sessao`: gera só as mudanças nos arquivos, com um bloco `lore-pack-mudancas` no fim. Salve a resposta em `sessoes/<id>/fechamento.md` (o Claude Code já escreve lá; no app, cole na seção "Fechamento"), escolha o que aplicar com `lore-pack apply <id>` e feche a conversa.
 
 Prompts de apoio, a qualquer momento: `05-nova-ficha`, `06-criar-nomes`, `07-compactar`.
 
@@ -35,7 +36,7 @@ Prompts de apoio, a qualquer momento: `05-nova-ficha`, `06-criar-nomes`, `07-com
 - Só as fichas dos personagens e lugares que aparecem na cena. Nunca todas.
 - Só a última cena inteira, nunca o capítulo anterior completo.
 - Fichas em estilo telegráfico. Use `07-compactar` se alguma ficha passar de umas 20 linhas, e também na bíblia, se ela for longa (guarde a versão completa e use a compacta no pacote).
-- Conversa ficou longa (muitas cenas)? Roda o `04-fechar-sessao`, atualiza os arquivos e abre conversa nova.
+- Conversa ficou longa (muitas cenas)? Roda o `04-fechar-sessao`, aplica com `lore-pack apply` e abre conversa nova.
 - Peça sempre só o que mudou, nunca o arquivo reescrito.
 
 ## Quem decide o quê

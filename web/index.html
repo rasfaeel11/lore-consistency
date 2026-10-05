@@ -96,6 +96,50 @@
             </div>
           </div>
 
+          <h3>Fechamento</h3>
+          <p class="dica">
+            As mudanças que a IA propôs no prompt 04-fechar-sessao. Você marca quais aplicar nas fichas, no estado e
+            no alfabeto; nada é gravado antes de você confirmar.
+          </p>
+          <div id="fechamento-colar" hidden>
+            <label>
+              Resposta da IA ao prompt 04 (esta sessão ainda não tem fechamento.md)
+              <textarea id="fechamento-texto" rows="8" spellcheck="false"></textarea>
+            </label>
+            <button id="fechamento-ler" type="button">Ler fechamento</button>
+          </div>
+          <div id="fechamento-existe" hidden>
+            <p class="dica">
+              Lido de <code id="fechamento-arquivo"></code>. Para usar outro texto, edite esse arquivo e clique em "Reler".
+            </p>
+            <button id="fechamento-reler" type="button">Reler</button>
+          </div>
+          <p id="fechamento-aviso" class="aviso" hidden></p>
+          <pre id="fechamento-erro" class="erro" hidden></pre>
+          <div id="fechamento-correcao" hidden>
+            <p class="dica">Para a IA corrigir o bloco, cole isto na conversa:</p>
+            <pre id="fechamento-pedido"></pre>
+            <button id="copiar-correcao" type="button">Copiar pedido de correção</button>
+          </div>
+          <div id="fechamento-lista"></div>
+          <div id="fechamento-acoes" class="acoes" hidden>
+            <button id="fechamento-aplicar" type="button">Aplicar selecionadas</button>
+            <button id="confirmar-aplicar" type="button" class="perigo" hidden></button>
+            <button id="cancelar-aplicar" type="button" hidden>Cancelar</button>
+          </div>
+          <p id="fechamento-status" role="status"></p>
+          <pre id="fechamento-check" class="resumo" hidden></pre>
+
+          <div id="fechar" hidden>
+            <p class="dica">Fechar é à parte de aplicar: dá para aplicar uma parte agora e continuar a sessão.</p>
+            <div class="acoes">
+              <button id="fechar-sessao" type="button">Fechar sessão</button>
+              <button id="confirmar-fechar" type="button" class="perigo" hidden>Confirmar: fechar esta sessão</button>
+              <button id="cancelar-fechar" type="button" hidden>Cancelar</button>
+            </div>
+            <pre id="fechar-erro" class="erro" hidden></pre>
+          </div>
+
           <h3>sessao.md</h3>
           <pre id="sessao-corpo"></pre>
 

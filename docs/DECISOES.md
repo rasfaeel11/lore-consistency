@@ -259,3 +259,52 @@ Um processo que espera entrada **sem ter escrito nada na tela** não recebe a di
   - fechar a aba tira o terminal do servidor;
   - com `"nenhum"`, o botão fica desabilitado e o motivo aparece.
   - O único erro no console era o `favicon.ico` 404, silenciado com `<link rel="icon" href="data:,">`. O script era temporário e não ficou no repositório.
+
+## 2026-10-05: `apply`, aprovação do fechamento (M5)
+
+Especificação: `docs/prompts-dev/1-lore-pack/dev/M5.md`, na versão ajustada ao código. O que está abaixo é o que foi decidido ou mudou em relação a ela.
+
+### Formato
+- **Bloco `lore-pack-mudancas`** no fim da resposta do prompt 04: JSON `{ "operacoes": [ ... ] }`. Operações: `estado_adicionar`, `estado_substituir`, `ficha_criar`, `ficha_adicionar`, `ficha_substituir`, `alfabeto_adicionar` (com `secao` opcional; padrão "Nomes já usados") e `nao_aprovado` (só informa).
+- **O caminho nunca vem do JSON.** É calculado: `estado.md`, `alfabeto.md` ou `fichas/<pasta do tipo>/<id>.md`. O `id` passa pelo `idField` (a regra do `check`), que recusa `../` e maiúsculas. Antes de gravar, `isAllowedTarget` confere de novo, e o caminho resolvido precisa ficar dentro da pasta.
+- **Objetos estritos:** campo que não existe (`"arquivo": "biblia.md"`) vira erro com o nome do campo, em vez de ser ignorado em silêncio. Mesma escolha do `lore-pack.config.json`.
+- **Vale o último bloco** do texto: a IA pode citar um exemplo antes.
+- **Um teste lê o exemplo que está no próprio `04-fechar-sessao.md`** e exige que ele seja um bloco válido e que as seções citadas existam nos modelos de `estado.md` e `alfabeto.md`. Se o formato mudar e o prompt ficar para trás, o teste quebra.
+
+### Seções
+- No `estado.md` e no `alfabeto.md`, seção é linha de título (`## Título`); nas fichas, também a linha que começa com negrito (`**Fatos** (...):`). O nome é comparado sem parênteses, sem dois-pontos, sem acento e sem maiúsculas. Só no corpo, depois do cabeçalho YAML.
+- **Diferença para o prompt, de propósito:** o prompt fala só em `## `. O código aceita qualquer nível de `#` (e `#` também nas fichas), e a seção vai até o próximo título do mesmo nível ou acima. Nos modelos o resultado é igual; a diferença só aparece em arquivo que o autor organizou de outro jeito (por exemplo, `### Costeiros` dentro do alfabeto, ou ficha com `## Passado`).
+- Nome que casa com duas seções é erro, com a lista das que existem.
+- O marcador vazio do modelo (`- `) é substituído pela primeira linha nova.
+
+### Aplicar
+- **A CLI não pergunta.** `lore-pack apply <id>` só mostra a lista numerada com o diff; `--aplicar 1,3` ou `--aplicar todas` grava. A flag é a confirmação do princípio 4, como `--reverter` e `--sobrescrever`. (A primeira versão que escrevi perguntava operação por operação, seguindo o prompt antigo; foi refeita.)
+- **Tudo ou nada.** As escolhidas são aplicadas em memória, em sequência; se uma falhar, nenhuma é gravada. No fim roda o `validateStory`: erro que **não existia antes** cancela tudo, com a mensagem do `check`. Erro antigo da pasta não impede.
+- **Operação que depende de outra não escolhida** (um `ficha_adicionar` na ficha de um `ficha_criar` que ficou de fora) falha por esse mesmo caminho, e nada é gravado.
+- **Quebra de linha preservada:** arquivo que já estava em `\r\n` continua em `\r\n`.
+- **Guarda:** o `apply` recusa (até para listar) enquanto houver alteração direta não resolvida, e depois de gravar tira um snapshot novo, se a sessão já tinha um. Sem isso, a guarda acusaria o que o próprio autor aprovou e o `sessao fechar` recusaria.
+
+### Não repetir
+- **`sessoes/<id>/aplicado.json`**: sha256 do `fechamento.md`, data e os números já aplicados. Com o mesmo arquivo, as aplicadas aparecem como "já aplicada" e não podem ser escolhidas; as outras continuam disponíveis ("aprovo metade agora e o resto depois"). Se o `fechamento.md` mudar, o registro deixa de valer e a lista avisa que é um fechamento novo.
+- **Segunda proteção, além do prompt:** `estado_adicionar`, `ficha_adicionar` e `alfabeto_adicionar` não repetem linha que já está na seção, e recusam se todas já estiverem. Cobre o caso de o `aplicado.json` ser apagado ou de a IA reescrever o fechamento com as mesmas operações.
+- O `aplicado.json` fica em `sessoes/`, que a guarda não vigia.
+
+### Fechar sessão
+- **Fechar é separado de aplicar.** A lógica saiu do `closeCommand` para `closeSessionFolder` (`src/cli/sessao.ts`), usada pelo `sessao fechar` e pelo app, como o `createSession` no M4a.
+- **No app, o botão "Fechar sessão" aparece em toda sessão aberta,** e não só depois de aplicar (o prompt dizia "habilita depois de aplicar"). Motivo: sessão sem nada para aplicar também precisa poder ser fechada pela página, como já pode pela CLI.
+
+### App
+- Rotas: `GET /api/sessoes/:id/fechamento`, `POST /api/sessoes/:id/fechamento` (`{ texto }`), `POST .../fechamento/aplicar` (`{ indices }`) e `POST /api/sessoes/:id/fechar` (`{ resumo? }`).
+- **Regra herdada do terminal:** o navegador só diz qual sessão e quais números. Operações, caminhos e conteúdos vêm do `fechamento.md` lido no servidor. Um teste manda `arquivo`, `caminho`, `texto` e `operacoes` no corpo do `aplicar` e prova que são ignorados.
+- **`POST /fechamento` nunca sobrescreve** (409 se o arquivo existe). **E não salva texto com bloco inválido** (400 com o erro e o pedido de correção): um arquivo ruim salvo ali não poderia ser trocado pela página, e o autor ficaria preso. Isso não estava no prompt.
+- **409 com terminal rodando** no `aplicar`: a IA ainda pode estar escrevendo o `fechamento.md`, e o snapshot novo esconderia o que ela fizer.
+- **Com a guarda acusando,** o `GET` devolve o aviso da guarda no lugar da lista.
+- Na página: caixas marcadas por padrão, "Aplicar selecionadas" em dois cliques ("Confirmar: aplicar N mudanças"), botão "Reler" e, quando o programa do terminal termina, a lista é recarregada sozinha.
+- **Verificado num navegador de verdade** (Chrome headless pelo protocolo de depuração, script temporário que não ficou no repositório): colar texto sem bloco mostra o erro e o pedido de correção; colar o exemplo do prompt 04 lista 8 operações; desmarcar metade e confirmar grava só as 4 marcadas; o check passa; a guarda não acusa; "Fechar sessão" fecha e a barra lateral atualiza.
+
+### O que não mudou
+- `instrucoes/instrucoes-ia.md` e `buildSessionFilesBlock`: já mandam a IA escrever o `fechamento.md` "no formato de prompts-de-sessao/04-fechar-sessao.md", e é esse arquivo que ganhou o bloco.
+- Nenhuma dependência nova: o diff é o `diffLines` da guarda, e o hash é do `node:crypto`.
+
+### Limite conhecido
+- O prompt 04 novo só chega a pastas novas. Pasta criada antes mantém o antigo; a mensagem de "Não achei o bloco" explica como pegar o novo. (Ideia no V2.)

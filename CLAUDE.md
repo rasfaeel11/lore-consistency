@@ -6,7 +6,7 @@ Ferramenta para quem escreve histórias com ajuda de IA. Organiza o mundo da his
 
 ## Status atual
 
-- Marco em andamento: **M5** (`apply`: aprovação do fechamento)
+- Marco em andamento: **M6** (publicação)
 - Atualize esta linha ao fechar cada marco.
 
 ## Roteiro
@@ -41,8 +41,8 @@ Fora do escopo até a v1: chamar API de IA, contas de usuário, hospedagem onlin
 
 ```
 src/
-  core/        # funções puras: schemas da ficha e da sessão, validação, montagem do pacote, capítulos, sessões, guarda do cânone e configuração do terminal (terminal-config.ts)
-  cli/         # comandos (lista única em commands.ts): init, check, pack, capitulo, sessao, atualizar-instrucoes, ui. Lê e escreve arquivos. Também: guard.ts (snapshot da guarda), instrucoes.ts (CLAUDE.md/AGENTS.md da história) e open-browser.ts.
+  core/        # funções puras: schemas da ficha e da sessão, validação, montagem do pacote, capítulos, sessões, guarda do cânone, mudanças do fechamento (changes.ts) e configuração do terminal (terminal-config.ts)
+  cli/         # comandos (lista única em commands.ts): init, check, pack, capitulo, sessao, apply, atualizar-instrucoes, ui. Lê e escreve arquivos. Também: guard.ts (snapshot da guarda), instrucoes.ts (CLAUDE.md/AGENTS.md da história) e open-browser.ts.
   server/      # servidor do app local (app.ts: node:http + ws, só 127.0.0.1) e terminal embutido (terminal.ts: terminais e WebSocket, node-pty opcional; command.ts: acha o comando no PATH). Usa o núcleo e as funções da CLI.
   index.ts     # ponto de entrada da CLI
 web/           # página do app: HTML, CSS e JS puro, servidos pelo server/
@@ -55,6 +55,7 @@ docs/
   DECISOES.md  # diário de decisões
   V2.md        # ideias adiadas
   CHECKLIST-M4b.md # teste manual do terminal e da guarda com o Claude Code de verdade
+  CHECKLIST-M5.md  # teste manual do apply (app e CLI)
   prompts-dev/ # prompts que não são do produto. O LEIAME.md é o índice.
     1-lore-pack/dev/               # prompts de marco, para construir o projeto com o Claude Code
     1-lore-pack/sessao-de-escrita/ # versão original dos modelos de prompt de sessão
@@ -90,6 +91,9 @@ Cânone organizado por tema (magia, combate, política...), em `referencias/<id>
 - Capítulo: `capitulos/cap-NN.md`. Título = primeiro cabeçalho `# `; sem ele, o nome do arquivo.
 - Sessão: pasta `sessoes/<id>/` com `sessao.md` e `pacote.md`. Id `data-capítulo-sequência` (`2026-10-01-cap-03-01`), igual ao nome da pasta.
 - `sessoes/<id>/fechamento.md`: as propostas de mudança. A IA escreve esse arquivo com a sessão ainda **aberta** (é o que o `buildStartPrompt` e o bloco de arquivos do pacote pedem). O `sessao fechar --fechamento <arquivo>` só copia um arquivo para lá, e recusa se ele já existir.
+- Formato do fechamento: a resposta do prompt `04-fechar-sessao` termina com um bloco de código com a etiqueta `lore-pack-mudancas`, com JSON `{ "operacoes": [ ... ] }`. Operações: `estado_adicionar`, `estado_substituir`, `ficha_criar`, `ficha_adicionar`, `ficha_substituir`, `alfabeto_adicionar` e `nao_aprovado` (só informa). O caminho nunca vem do JSON, e nenhuma operação apaga.
+- `lore-pack apply <id>` mostra as operações numeradas com o diff e não grava nada; `--aplicar 1,3` ou `--aplicar todas` grava (tudo ou nada). Só altera `estado.md`, `alfabeto.md` e fichas. Recusa com a guarda acusando e, depois de gravar, tira um snapshot novo. No app, é a seção "Fechamento" da sessão. Aplicar não fecha a sessão.
+- `sessoes/<id>/aplicado.json`: o que já foi aplicado (sha256 do `fechamento.md`, data e números das operações), para rodar de novo não repetir nada.
 - `sessoes/<id>/alteracoes-diretas.md`: gerado pelo "Manter" da guarda (`sessao verificar --manter` ou o botão do app), com as alterações diretas em arquivos protegidos que o autor decidiu manter.
 - Guarda do cânone: ao criar a sessão, o lore-pack copia os arquivos protegidos (`biblia.md`, `estado.md`, `alfabeto.md`, `fichas/`, `referencias/`, `capitulos/`, mais `CLAUDE.md`, `AGENTS.md`, `.claude/settings.json` e `lore-pack.config.json`) para `.lore-pack/snapshots/<id>/`, pasta fora do git e ignorada pelo `check`. `sessao verificar` e o app comparam com o snapshot; `sessao fechar` recusa enquanto houver mudança não resolvida. É detecção depois do fato, não bloqueio.
 - Cabeçalho do `sessao.md`: `id`, `capitulo` (precisa existir em `capitulos/`), `criada_em` (ISO), `status` (`aberta` | `fechada`), `fechada_em` (obrigatório se fechada). Corpo: `## Plano` e, depois de fechada, `## Resumo` opcional.
