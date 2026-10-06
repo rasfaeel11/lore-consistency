@@ -308,3 +308,41 @@ Especificação: `docs/prompts-dev/1-lore-pack/dev/M5.md`, na versão ajustada a
 
 ### Limite conhecido
 - O prompt 04 novo só chega a pastas novas. Pasta criada antes mantém o antigo; a mensagem de "Não achei o bloco" explica como pegar o novo. (Ideia no V2.)
+
+## 2026-10-06: publicação (M6)
+
+### Nome
+- `npm view` respondeu 404 para `lore-pack`, `lorepack` e `lore_pack`. O nome fica. Nada foi renomeado.
+
+### Empacotamento
+- **`package.json`:** `author` (só o nome, sem e-mail), `repository`, `homepage`, `bugs` e `keywords`. O repositório no GitHub se chama `lore-consistency`; o pacote se chama `lore-pack`. Os endereços vieram do `git remote`.
+- **`prepublishOnly`: `npm run build && npm run verify:dist`.** O `dist/` está no `.gitignore` e o `npm publish` não compila sozinho; sem isso daria para publicar um pacote vazio.
+- **`LICENSE`:** MIT, "Copyright (c) 2026 Rafael Melo" (nome do `git config`).
+- **`engines.node` continua `>=24`.** Conferido em nodejs.org em 2026-10-06: o Node 24 está em LTS e o 26 ainda é "Current".
+- **`*.tgz` no `.gitignore`:** o `npm pack` do teste de instalação deixa o arquivo na raiz.
+- **Versão 0.1.0**, com `npm version 0.1.0 --no-git-tag-version`. A tag do git fica para o dia da publicação.
+
+### Exemplo `exemplos/varmonte`
+- Feito com os comandos reais: `init`, `capitulo novo` (duas vezes), `sessao nova`, `sessao verificar --manter` (o texto do capítulo foi escrito com a sessão aberta, então a guarda acusou, e a pasta mostra o `alteracoes-diretas.md`), `apply --aplicar todas` e `sessao fechar --resumo`.
+- **Não vai no pacote do npm** (`files` não lista `exemplos`). Por isso o tutorial do README parte do `init`, que funciona para quem instalou pelo npm, e aponta o exemplo como "pasta já preenchida" para quem clonou.
+- **Sem `CLAUDE.md`, `AGENTS.md` e `.claude/settings.json`.** Conferido na documentação do Claude Code (code.claude.com/docs/en/memory): "Files in subdirectories load on demand", ou seja, o `CLAUDE.md` e o `AGENTS.md` de uma subpasta entram no contexto quando o Claude lê um arquivo dela. Com eles ali, quem trabalhasse neste repositório e abrisse o exemplo carregaria "nunca edite fichas/". É o mesmo risco que levou as instruções para fora de `templates/` no M4b. O README diz que o `init` cria esses arquivos.
+- **Sem `.lore-pack/`:** a pasta tem `.gitignore` próprio com `*`, então os snapshots não vão para o git. Um clone não tem snapshot, e a sessão do exemplo aparece como "sem snapshot".
+- **Teste** (`tests/cli/exemplo.test.ts`): `check` com saída 0 e sem aviso, dois capítulos e a sessão fechada, o `apply` ainda lê o fechamento com tudo "já aplicada" (o que também prova que o hash do `aplicado.json` não depende da quebra de linha do checkout), e a ausência das instruções da IA. Os testes só leem a pasta.
+- O nome "Varmonte" também era o do mundo de demonstração do projeto antigo arquivado. Não tem relação com a história do autor.
+
+### CI
+- `macos-latest` entrou na matriz, sem recriar o workflow.
+- **Passo novo "node-pty carrega" (Windows e macOS):** os testes do terminal usam `skipIf` quando o `node-pty` não carrega. Num sistema com binário pronto, isso esconderia uma quebra; o passo falha antes. No Linux o pulo é de propósito.
+- **Passo novo "instala o .tgz numa pasta limpa":** `npm pack`, `npm install` do arquivo numa pasta temporária, e `--version`, `init` e `check` a partir dele. Pega o que o `verify:dist` não pega (dependência faltando no pacote, `bin` errado).
+
+### Instalação limpa (feita à mão no Windows, Node 24, npm 11)
+- A partir do `.tgz`, numa pasta fora do repositório: `--help`, `--version`, `init`, `check`, `capitulo novo`, `pack`, `sessao nova`, `listar`, `verificar`, `fechar`, `apply` (lista e `--aplicar`), `atualizar-instrucoes` e `ui --help` funcionaram.
+- **App a partir do pacote instalado:** a página, o script, o estilo e os três arquivos do xterm respondem 200; com o `node-pty`, o terminal liga e abre; com a pasta do `node-pty` renomeada, `/api/terminal` responde "desligado" com o motivo e abrir terminal dá 503.
+- O npm 11 avisa que o `node-pty` tem scripts de instalação não aprovados e segue. O binário pronto já funciona sem eles (como registrado no M4b).
+- **Não verificado nesta máquina:** Linux e macOS. Ficam por conta da CI.
+- Nada dependia do ambiente de desenvolvimento.
+
+### Documentação
+- `README.md` e `README.en.md` (um linka o outro). O inglês avisa que as mensagens e os modelos da ferramenta estão em português.
+- `CHANGELOG.md`, `docs/PUBLICAR.md` (publicar é manual; nenhum script roda `npm publish`) e `docs/TESTE-COM-USUARIOS.md`.
+- O GIF de demonstração ainda não existe: o README tem o lugar marcado e as instruções para gravar.

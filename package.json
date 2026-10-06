@@ -1,7 +1,28 @@
 {
   "name": "lore-pack",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Organiza o mundo da sua história em fichas e monta o pacote de contexto para escrever com IA.",
+  "keywords": [
+    "escrita",
+    "ficcao",
+    "worldbuilding",
+    "lore",
+    "ia",
+    "llm",
+    "contexto",
+    "markdown",
+    "cli",
+    "writing"
+  ],
+  "author": "Rafael Melo",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rasfaeel11/lore-consistency.git"
+  },
+  "homepage": "https://github.com/rasfaeel11/lore-consistency#readme",
+  "bugs": {
+    "url": "https://github.com/rasfaeel11/lore-consistency/issues"
+  },
   "type": "module",
   "bin": {
     "lore-pack": "dist/index.js"
@@ -18,7 +39,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --dir tests",
     "verify:dist": "node scripts/verify-dist.mjs",
-    "relink": "npm run build && npm run verify:dist && npm link"
+    "relink": "npm run build && npm run verify:dist && npm link",
+    "prepublishOnly": "npm run build && npm run verify:dist"
   },
   "engines": {
     "node": ">=24"

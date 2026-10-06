@@ -9,7 +9,7 @@ jobs:
   teste:
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -18,7 +18,27 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # Windows e macOS têm binário pronto do node-pty. Se ele não carregar, os testes do terminal
+      # seriam pulados em silêncio (skipIf); este passo falha antes. No Linux ele precisa compilar
+      # e pode faltar: lá os testes pulam de propósito.
+      - name: node-pty carrega (Windows e macOS)
+        if: runner.os != 'Linux'
+        run: node -e "import('node-pty').then(() => console.log('node-pty ok'))"
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
       - run: npm run verify:dist
+      # O que o verify:dist não pega: instalar o pacote de verdade, numa pasta limpa, e usar.
+      - name: Instala o .tgz numa pasta limpa e roda init e check
+        shell: bash
+        run: |
+          npm pack
+          TGZ=$(ls lore-pack-*.tgz)
+          mkdir -p "$RUNNER_TEMP/limpa"
+          cp "$TGZ" "$RUNNER_TEMP/limpa/"
+          cd "$RUNNER_TEMP/limpa"
+          npm init -y > /dev/null
+          npm install "./$TGZ"
+          npx lore-pack --version
+          npx lore-pack init historia
+          npx lore-pack check historia

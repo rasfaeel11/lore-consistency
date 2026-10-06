@@ -1,12 +1,12 @@
 # lore-pack
 
-> Nome provisório. Antes de publicar, confirmar se o nome está livre no npm.
+> O nome `lore-pack` estava livre no npm em 2026-10-06 (assim como `lorepack` e `lore_pack`). Confira de novo no dia de publicar: `docs/PUBLICAR.md`.
 
 Ferramenta para quem escreve histórias com ajuda de IA. Organiza o mundo da história em fichas (markdown) e monta o **pacote de contexto** de cada sessão de escrita: bíblia + estado + só as fichas relevantes + última cena, com estimativa de tokens. Funciona com qualquer IA (Claude, Gemini, ChatGPT): a ferramenta gera o texto e o usuário cola. Sem API, sem conta, sem pagamento.
 
 ## Status atual
 
-- Marco em andamento: **M6** (publicação)
+- **v0.1.0 pronta para publicar.** Todos os marcos do roteiro estão fechados; publicar no npm é um passo manual (`docs/PUBLICAR.md`).
 - Atualize esta linha ao fechar cada marco.
 
 ## Roteiro
@@ -21,7 +21,7 @@ Ferramenta para quem escreve histórias com ajuda de IA. Organiza o mundo da his
 | M4a.1 | Referências por tema, tipos `povo` e `conceito`, regra de segredos no prompt |
 | M4b | Terminal embutido |
 | M5 | `apply` (aprovação do fechamento) |
-| M6 | Publicação |
+| M6 | Publicação: README, exemplo, CI nos três sistemas, v0.1.0 |
 
 Fora do escopo até a v1: chamar API de IA, contas de usuário, hospedagem online e servidor acessível fora do próprio computador, sincronização na nuvem, editor de texto próprio. Ideia nova vai para `docs/V2.md`.
 
@@ -46,6 +46,7 @@ src/
   server/      # servidor do app local (app.ts: node:http + ws, só 127.0.0.1) e terminal embutido (terminal.ts: terminais e WebSocket, node-pty opcional; command.ts: acha o comando no PATH). Usa o núcleo e as funções da CLI.
   index.ts     # ponto de entrada da CLI
 web/           # página do app: HTML, CSS e JS puro, servidos pelo server/
+exemplos/      # exemplos/varmonte: mundo inventado pequeno, feito com os comandos reais. Fica fora do pacote do npm.
 templates/     # o que o `init` copia para a pasta da história (inclui o lore-pack.config.json)
 instrucoes/    # texto do CLAUDE.md/AGENTS.md e o .claude/settings.json que o `init` grava na história
 scripts/       # scripts do build: limpar o dist/ e conferir o build (verify:dist)
@@ -56,12 +57,14 @@ docs/
   V2.md        # ideias adiadas
   CHECKLIST-M4b.md # teste manual do terminal e da guarda com o Claude Code de verdade
   CHECKLIST-M5.md  # teste manual do apply (app e CLI)
+  PUBLICAR.md      # passo a passo para publicar no npm
+  TESTE-COM-USUARIOS.md # roteiro de 20 minutos para testar com quem escreve
   prompts-dev/ # prompts que não são do produto. O LEIAME.md é o índice.
     1-lore-pack/dev/               # prompts de marco, para construir o projeto com o Claude Code
     1-lore-pack/sessao-de-escrita/ # versão original dos modelos de prompt de sessão
     2-fluxo-manual-original/       # o fluxo manual de antes do lore-pack (referência)
     3-lore-checker-arquivado/      # projeto anterior, arquivado
-.github/workflows/ci.yml # CI: typecheck, testes, build e verify:dist
+.github/workflows/ci.yml # CI em Ubuntu, Windows e macOS: typecheck, testes, build, verify:dist e instalação do .tgz numa pasta limpa
 ```
 
 ## Formato da ficha
