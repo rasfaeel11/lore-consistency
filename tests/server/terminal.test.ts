@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { request, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -214,7 +214,7 @@ describe("terminal embutido", SLOW, () => {
         await client.waitFor(() => client.messages.some((m) => m.tipo === "fim"), "o fim do processo");
 
         expect(client.output()).toContain(`PROMPT:Leia o arquivo sessoes/${OPEN}/pacote.md`);
-        expect(client.output().replace(/\n/g, "")).toContain(`CWD:${story}`);
+        expect(client.output().replace(/\n/g, "")).toContain(`CWD:${shownCwd(story)}`);
         expect(client.messages.find((m) => m.tipo === "fim")?.codigo).toBe(0);
         client.ws.close();
       },
@@ -237,7 +237,7 @@ describe("terminal embutido", SLOW, () => {
 
         expect(client.output()).toContain("PROMPT:");
         expect(client.output()).not.toContain("INVADIU");
-        expect(client.output().replace(/\n/g, "")).toContain(`CWD:${story}`);
+        expect(client.output().replace(/\n/g, "")).toContain(`CWD:${shownCwd(story)}`);
         client.ws.close();
       },
     );
@@ -460,3 +460,9 @@ describe("terminal embutido", SLOW, () => {
     });
   });
 });
+
+// A pasta como o processo a enxerga. No macOS, a pasta temporária fica atrás de um atalho
+// (/var aponta para /private/var), e o process.cwd() do programa mostra o caminho de verdade.
+function shownCwd(folder: string): string {
+  return process.platform === "win32" ? folder : realpathSync(folder);
+}
