@@ -5,7 +5,6 @@
 Ferramenta de linha de comando (com um app local opcional) para quem escreve histórias com ajuda de IA. Ela organiza o mundo da história em fichas de markdown e monta, para cada sessão de escrita, o **pacote de contexto**: só o que a IA precisa saber para escrever a próxima cena.
 
 Funciona com qualquer IA (Claude, Gemini, ChatGPT): a ferramenta gera o texto e você cola. Sem API, sem conta, sem pagamento. Os arquivos da sua história nunca saem do seu computador.
--->
 
 ## O problema
 
@@ -27,19 +26,17 @@ O que funciona é disciplina: uma bíblia curta, um resumo do estado da históri
 
 Precisa do [Node.js](https://nodejs.org) 24 ou mais novo.
 
-```
-npm install -g lore-pack
-lore-pack --help
-```
-
-Para rodar a partir do código:
+O pacote ainda não está publicado no npm. Por enquanto, instale a partir do código:
 
 ```
 git clone https://github.com/rasfaeel11/lore-consistency.git
 cd lore-consistency
 npm install
 npm run relink
+lore-pack --help
 ```
+
+O `npm run relink` compila, confere o build e deixa o comando `lore-pack` disponível no seu terminal.
 
 O terminal embutido do app usa o pacote opcional `node-pty`, que traz binário pronto para Windows e macOS. No Linux ele precisa compilar (Python, make e um compilador C++); se não compilar, a instalação termina do mesmo jeito, o terminal aparece desligado e todo o resto funciona.
 
@@ -156,6 +153,7 @@ O app roda um servidor no seu computador e pode abrir um programa de terminal. O
 
 - Escuta só em `127.0.0.1`. Nunca é exposto na rede.
 - Cada execução do `lore-pack ui` gera um token novo. A API exige o token no cabeçalho `X-Lore-Pack-Token`; a página e o WebSocket, na URL. Sem o token, nada responde.
+- **O token na URL é uma troca consciente, não ausência de risco:** ele fica no histórico do navegador. O navegador não deixa mandar cabeçalho ao abrir uma página nem um WebSocket, e é a URL que permite recarregar a página e voltar ao mesmo terminal. O que limita o estrago: o token vale só até você encerrar aquele `lore-pack ui`, o servidor só atende o próprio computador e não grava log de pedidos, e a página não carrega nada de outro site.
 - Confere `Host` e `Origin` em todo pedido, para um site aberto no navegador não conseguir falar com o app. Os `POST` exigem `Content-Type: application/json`.
 - Serve uma lista fechada de arquivos: nenhum caminho vindo do navegador vira caminho no disco.
 - O WebSocket do terminal exige `Origin` do próprio app e o token, aceita mensagens de até 64 KB, e há no máximo 4 terminais abertos.
@@ -167,7 +165,7 @@ O app roda um servidor no seu computador e pode abrir um programa de terminal. O
 ## Limitações
 
 - A contagem de tokens é estimada: caracteres ÷ 3. Cada IA conta de um jeito.
-- A busca de menções é por palavra inteira, sem diferenciar maiúsculas e acentos. Ela acha "Ana" no plano; não entende "a cartógrafa".
+- A busca de menções procura o `nome` e os `aliases` de cada ficha, por palavra inteira, sem diferenciar maiúsculas e acentos. "Aninha" no plano puxa a ficha da Ana se estiver nos `aliases` dela; "a cartógrafa" só puxa se você cadastrar esse alias. Ela não interpreta o texto.
 - O `apply` só altera `estado.md`, `alfabeto.md` e fichas. Não mexe na bíblia, nos capítulos nem nas referências, e não apaga nada.
 - O terminal embutido depende do `node-pty`. Sem binário pronto no Linux, ele fica desligado, e "copiar pacote" continua funcionando.
 - As mensagens da ferramenta e os modelos estão em português.
@@ -195,8 +193,6 @@ npm run build && npm run verify:dist
 ```
 
 TypeScript `strict`, Vitest, e poucas dependências: `yaml`, `zod`, `ws` e o xterm (mais o `node-pty`, opcional). O histórico das versões está no [`CHANGELOG.md`](CHANGELOG.md).
-
-
 
 ## Licença
 

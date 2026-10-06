@@ -262,7 +262,7 @@ Um processo que espera entrada **sem ter escrito nada na tela** não recebe a di
 
 ## 2026-10-05: `apply`, aprovação do fechamento (M5)
 
-Especificação: `docs/prompts-dev/1-lore-pack/dev/M5.md`, na versão ajustada ao código. O que está abaixo é o que foi decidido ou mudou em relação a ela.
+Especificação: `docs/prompts-dev/M5.md`, na versão ajustada ao código. O que está abaixo é o que foi decidido ou mudou em relação a ela.
 
 ### Formato
 - **Bloco `lore-pack-mudancas`** no fim da resposta do prompt 04: JSON `{ "operacoes": [ ... ] }`. Operações: `estado_adicionar`, `estado_substituir`, `ficha_criar`, `ficha_adicionar`, `ficha_substituir`, `alfabeto_adicionar` (com `secao` opcional; padrão "Nomes já usados") e `nao_aprovado` (só informa).
@@ -353,4 +353,12 @@ Especificação: `docs/prompts-dev/1-lore-pack/dev/M5.md`, na versão ajustada a
 - **Correção:** ao carregar o `node-pty` fora do Windows, `loadNodePty` liga a permissão de execução do `spawn-helper` (`makeExecutable`, em `src/server/terminal.ts`). Se a instalação for só de leitura, fica como está, e o erro aparece ao abrir o terminal, com "copiar pacote" funcionando.
 - **Por que valeu o passo "node-pty carrega" e o macOS na matriz:** sem eles, esses testes seriam pulados ou nem rodariam, e a primeira pessoa com Mac descobriria o problema.
 - A mensagem exata do erro no macOS não foi lida: os logs da CI exigem login, e só as anotações (teste, linha e status 500) são públicas. A causa foi deduzida do status 500 no `spawn` e do risco já registrado; o que confirma é a rodada seguinte da CI.
+
+## 2026-10-06: limpeza do repositório
+
+- **Apagados** (continuam no histórico do git): `COMECE-AQUI.md` (era um bilhete do começo do projeto, desatualizado); as cópias soltas de `ABERTURA.md`, `M0.md` e `M1.md`; `docs/prompts-dev/2-fluxo-manual-original/` e `3-lore-checker-arquivado/` (não são deste projeto); e `docs/prompts-dev/1-lore-pack/sessao-de-escrita/`, que repetia `templates/prompts-de-sessao/`.
+- **`docs/prompts-dev/` ficou plano:** os prompts de marco saíram de `1-lore-pack/dev/` para a raiz da pasta, e o `LEIAME.md` virou um índice curto. O único prompt de sessão que não existe nos modelos (`08-discutir-rumos.md`) foi mantido ali.
+- Com isso, a única menção ao nome da história do autor saiu da árvore (era só o nome, no `LEIAME.md` antigo; ele ainda aparece no histórico do git).
+- **README:** a instalação passou a ser pelo código (clonar e `npm run relink`), porque o pacote ainda não está no npm e `npm install -g lore-pack` daria 404. Ao publicar, trocar de volta (`docs/PUBLICAR.md`).
+- **Token na URL, dito como é:** a página e o WebSocket recebem o token na URL, então ele fica no histórico do navegador. É uma troca consciente: o navegador não deixa pôr cabeçalho em WebSocket nem na abertura de uma página, e manter o token na URL é o que permite recarregar a página e reanexar ao terminal. O que limita o risco: o token vale só para aquela execução do `lore-pack ui`, o servidor só escuta em 127.0.0.1 e não escreve log de pedidos, e a página não carrega nada de outro site (sem `Referer` para fora).
 

@@ -28,19 +28,17 @@ What works is discipline: a short bible, a summary of where the story stands, on
 
 Requires [Node.js](https://nodejs.org) 24 or newer.
 
-```
-npm install -g lore-pack
-lore-pack --help
-```
-
-To run from source:
+The package is not published on npm yet. For now, install from source:
 
 ```
 git clone https://github.com/rasfaeel11/lore-consistency.git
 cd lore-consistency
 npm install
 npm run relink
+lore-pack --help
 ```
+
+`npm run relink` builds, checks the build and makes the `lore-pack` command available in your terminal.
 
 The app's embedded terminal uses the optional `node-pty` package, which ships prebuilt binaries for Windows and macOS. On Linux it has to compile (Python, make and a C++ compiler); if it does not, installation still finishes, the terminal shows as disabled, and everything else works.
 
@@ -157,6 +155,7 @@ The app runs a server on your computer and can start a terminal program. What it
 
 - It listens on `127.0.0.1` only. It is never exposed to the network.
 - Every run of `lore-pack ui` generates a new token. The API requires it in the `X-Lore-Pack-Token` header; the page and the WebSocket, in the URL. Without the token nothing answers.
+- **The token in the URL is a deliberate trade-off, not an absence of risk:** it stays in the browser history. A browser cannot send a header when opening a page or a WebSocket, and the URL is what lets you reload the page and get back to the same terminal. What limits the damage: the token is only valid until you stop that `lore-pack ui`, the server only answers your own computer and writes no request log, and the page loads nothing from other sites.
 - It checks `Host` and `Origin` on every request, so a site open in your browser cannot talk to the app. `POST` requests must be `Content-Type: application/json`.
 - It serves a closed list of files: no path coming from the browser becomes a path on disk.
 - The terminal WebSocket requires the app's own `Origin` and the token, accepts messages up to 64 KB, and at most 4 terminals can be open.
@@ -168,7 +167,7 @@ The app runs a server on your computer and can start a terminal program. What it
 ## Limitations
 
 - The token count is an estimate: characters ÷ 3. Each AI counts differently.
-- Mentions are matched as whole words, ignoring case and accents. It finds "Ana" in the plan; it does not understand "the cartographer".
+- Mention search looks for each card's `nome` and `aliases`, as whole words, ignoring case and accents. "Aninha" in the plan pulls Ana's card if it is in her `aliases`; "the cartographer" only does if you add that alias. It does not interpret the text.
 - `apply` only changes `estado.md`, `alfabeto.md` and cards. It does not touch the bible, the chapters or the references, and it deletes nothing.
 - The embedded terminal depends on `node-pty`. Without a prebuilt binary on Linux it is disabled, and "copy the pack" keeps working.
 - The tool's messages and templates are in Portuguese.

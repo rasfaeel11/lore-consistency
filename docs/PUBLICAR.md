@@ -44,6 +44,7 @@ Passo a passo para publicar uma versão. Quem publica é você, à mão: nenhum 
    git push origin main --tags
    ```
 8. **Confira:** `npm view lore-pack version` e, numa pasta qualquer, `npx lore-pack@latest --version`.
+9. **Na primeira publicação, atualize o README** (`README.md` e `README.en.md`): a seção "Instalação" hoje manda clonar o repositório, porque o pacote ainda não está no npm. Troque por `npm install -g lore-pack` e deixe o clone como alternativa.
 
 ## Se der errado
 - Dá para tirar do ar uma versão publicada por engano nas primeiras 72 horas (`npm unpublish lore-pack@0.1.0`), mas **o mesmo número de versão não pode ser publicado de novo**. O normal é corrigir e publicar a 0.1.1.

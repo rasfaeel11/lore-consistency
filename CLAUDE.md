@@ -59,11 +59,7 @@ docs/
   CHECKLIST-M5.md  # teste manual do apply (app e CLI)
   PUBLICAR.md      # passo a passo para publicar no npm
   TESTE-COM-USUARIOS.md # roteiro de 20 minutos para testar com quem escreve
-  prompts-dev/ # prompts que não são do produto. O LEIAME.md é o índice.
-    1-lore-pack/dev/               # prompts de marco, para construir o projeto com o Claude Code
-    1-lore-pack/sessao-de-escrita/ # versão original dos modelos de prompt de sessão
-    2-fluxo-manual-original/       # o fluxo manual de antes do lore-pack (referência)
-    3-lore-checker-arquivado/      # projeto anterior, arquivado
+  prompts-dev/ # prompts de marco usados para construir o projeto com o Claude Code (não são do produto). O LEIAME.md é o índice.
 .github/workflows/ci.yml # CI em Ubuntu, Windows e macOS: typecheck, testes, build, verify:dist e instalação do .tgz numa pasta limpa
 ```
 
