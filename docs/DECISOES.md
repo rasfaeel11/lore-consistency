@@ -346,3 +346,11 @@ Especificação: `docs/prompts-dev/1-lore-pack/dev/M5.md`, na versão ajustada a
 - `README.md` e `README.en.md` (um linka o outro). O inglês avisa que as mensagens e os modelos da ferramenta estão em português.
 - `CHANGELOG.md`, `docs/PUBLICAR.md` (publicar é manual; nenhum script roda `npm publish`) e `docs/TESTE-COM-USUARIOS.md`.
 - O GIF de demonstração ainda não existe: o README tem o lugar marcado e as instruções para gravar.
+
+### macOS: o terminal não abria (achado pela CI)
+- **O que aconteceu:** na primeira rodada da CI com `macos-latest`, o `node-pty` carregou, mas abrir um terminal respondia 500. Dez testes do terminal falharam; no Ubuntu e no Windows tudo passou.
+- **Causa:** no macOS o `node-pty` abre o programa por um executável auxiliar, `prebuilds/darwin-<arch>/spawn-helper`, que vem no pacote do npm **sem permissão de execução**. Quem a devolveria é um script de instalação, e o npm 11 não roda scripts sem aprovação. Era o "risco não verificado" registrado no M4b, parte 2.
+- **Correção:** ao carregar o `node-pty` fora do Windows, `loadNodePty` liga a permissão de execução do `spawn-helper` (`makeExecutable`, em `src/server/terminal.ts`). Se a instalação for só de leitura, fica como está, e o erro aparece ao abrir o terminal, com "copiar pacote" funcionando.
+- **Por que valeu o passo "node-pty carrega" e o macOS na matriz:** sem eles, esses testes seriam pulados ou nem rodariam, e a primeira pessoa com Mac descobriria o problema.
+- A mensagem exata do erro no macOS não foi lida: os logs da CI exigem login, e só as anotações (teste, linha e status 500) são públicas. A causa foi deduzida do status 500 no `spawn` e do risco já registrado; o que confirma é a rodada seguinte da CI.
+

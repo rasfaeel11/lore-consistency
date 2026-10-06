@@ -5,8 +5,7 @@
 Ferramenta de linha de comando (com um app local opcional) para quem escreve histórias com ajuda de IA. Ela organiza o mundo da história em fichas de markdown e monta, para cada sessão de escrita, o **pacote de contexto**: só o que a IA precisa saber para escrever a próxima cena.
 
 Funciona com qualquer IA (Claude, Gemini, ChatGPT): a ferramenta gera o texto e você cola. Sem API, sem conta, sem pagamento. Os arquivos da sua história nunca saem do seu computador.
-
-<!-- GIF de demonstração entra aqui: docs/demo.gif (como gravar: veja "Como gravar o GIF", no fim) -->
+-->
 
 ## O problema
 
@@ -197,9 +196,7 @@ npm run build && npm run verify:dist
 
 TypeScript `strict`, Vitest, e poucas dependências: `yaml`, `zod`, `ws` e o xterm (mais o `node-pty`, opcional). O histórico das versões está no [`CHANGELOG.md`](CHANGELOG.md).
 
-### Como gravar o GIF
 
-No Windows, o [ScreenToGif](https://www.screentogif.com) resolve. Copie `exemplos/varmonte` para fora do repositório (gravar cria uma sessão e mexe nas fichas) e grave, na janela do navegador com o `lore-pack ui` nessa cópia: criar uma sessão, abrir o terminal, colar um fechamento na seção "Fechamento", desmarcar metade das mudanças e aplicar. Salve como `docs/demo.gif`, com menos de 10 MB, e troque o comentário no topo deste arquivo por `![Demonstração](docs/demo.gif)`.
 
 ## Licença
 

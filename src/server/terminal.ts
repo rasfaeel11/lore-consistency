@@ -1,6 +1,8 @@
 import { execFile, execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { join } from "node:path";
+import { chmodSync, statSync } from "node:fs";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
 import type { IPty } from "node-pty";
 import type { WebSocket } from "ws";
 import { buildStartPrompt } from "../core/session.js";
@@ -16,9 +18,37 @@ export type PtyLoad = { ok: true; pty: PtyModule } | { ok: false; reason: string
 
 export async function loadNodePty(): Promise<PtyLoad> {
   try {
-    return { ok: true, pty: await import("node-pty") };
+    const pty = await import("node-pty");
+    fixSpawnHelper();
+    return { ok: true, pty };
   } catch (error) {
     return { ok: false, reason: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+// No macOS, o node-pty abre o programa por um executável auxiliar, o "spawn-helper". No pacote
+// do npm ele vem sem permissão de execução, e quem a devolveria é um script de instalação que
+// o npm 11 não roda sem aprovação. Sem isso, abrir o terminal falha com "posix_spawnp failed".
+// (Visto na CI do macOS, no M6.)
+function fixSpawnHelper(): void {
+  if (process.platform === "win32") return;
+  try {
+    const root = dirname(createRequire(import.meta.url).resolve("node-pty/package.json"));
+    makeExecutable(join(root, "prebuilds", `${process.platform}-${process.arch}`, "spawn-helper"));
+    makeExecutable(join(root, "build", "Release", "spawn-helper"));
+  } catch {
+    // Não achou o pacote: quem chamou já vai dizer que o node-pty não carregou.
+  }
+}
+
+// Liga a permissão de execução de um arquivo, se ele existir e ainda não tiver.
+// Sem permissão para mudar (instalação só de leitura), fica como está: o erro aparece ao abrir o terminal.
+export function makeExecutable(path: string): void {
+  try {
+    const { mode } = statSync(path);
+    if ((mode & 0o111) !== 0o111) chmodSync(path, mode | 0o755);
+  } catch {
+    // O arquivo não existe nesta instalação (outro sistema, ou node-pty compilado em outro lugar).
   }
 }
 
