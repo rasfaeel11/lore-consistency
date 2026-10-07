@@ -17,11 +17,12 @@ What works is discipline: a short bible, a summary of where the story stands, on
 ## What it does
 
 - **`init`** creates the story folder from templates: bible, state, a name alphabet, cards, references, and the prompts for each step of a session.
-- **`check`** validates the cards: required fields, duplicate ids, a name used by two cards, a card in the wrong folder.
+- **`check`** validates the cards: required fields, duplicate ids, a name used by two cards, a card in the wrong folder, a link to a card that does not exist, sections out of order.
 - **`pack`** builds the session pack: bible + state + only the cards mentioned in the scene plan and in the last scene + the references for the topic + the last scene, with a token estimate.
 - **`capitulo`** and **`sessao`** organise chapters and writing sessions, each session in its own folder.
 - **`apply`** reads the changes the AI proposed at the end of the session, shows a diff for each one, and writes only the ones you choose.
-- **`ui`** opens an app in your browser, on your computer only, with all of this as buttons and an embedded terminal for the AI.
+- **`ui`** opens an app in your browser, on your computer only, with all of this as buttons and an embedded terminal for the AI. When `check` finds problems, the "Resolver tudo com a IA" button opens a new conversation that fixes what it can without inventing anything; you see the diff and can undo it.
+- **`abrir`** opens the story folder in the file manager (in the app, the "Abrir pasta da história" button).
 - **Canon guard:** when a session starts, lore-pack keeps a copy of the story files and later reports any change made without your approval.
 
 ## Installation
@@ -61,8 +62,7 @@ id: ana-ferreira
 tipo: personagem
 nome: Ana Ferreira
 aliases: [Aninha]
-status: viva
-aparece_em: []
+relacionados: []
 ---
 ```
 
@@ -162,7 +162,7 @@ The app runs a server on your computer and can start a terminal program. What it
 - The terminal command comes only from `lore-pack.config.json`. The browser only says "open a terminal for session X".
 - In `apply`, the browser only says which session and which numbers from the list. The operations are read, on the server, from `fechamento.md`, and each file path is computed: it never comes from the AI's JSON.
 
-**The canon guard detects after the fact; it does not block.** If the AI rewrites a card, you find out and can revert, but the write already happened. The `.claude/settings.json` created by `init` forbids Claude Code from editing the protected files, but it only applies to Claude Code and does not catch a script the AI runs on its own. Gemini and ChatGPT ignore that file. Keep the story folder in git.
+**The canon guard detects after the fact; it does not block.** If the AI rewrites a card, you find out and can revert, but the write already happened. The AI may edit the canon when you ask (the story's `CLAUDE.md` says how), and the guard is what shows you the change. The `.claude/settings.json` created by `init` only forbids Claude Code from editing its own instructions and `lore-pack.config.json`; it only applies to Claude Code and does not catch a script the AI runs on its own. Gemini and ChatGPT ignore that file. Keep the story folder in git.
 
 ## Limitations
 

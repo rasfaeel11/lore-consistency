@@ -63,6 +63,8 @@ export const fichaSchema = z.object({
   }),
   nome: nomeField,
   aliases: optionalTextList("aliases"),
+  // Ids de outras fichas ou referências. O check confere se cada um existe.
+  relacionados: optionalTextList("relacionados"),
   status: z
     .string({ error: '"status" precisa ser um texto, por exemplo: status: vivo' })
     .nullish()
@@ -71,3 +73,6 @@ export const fichaSchema = z.object({
 });
 
 export type Ficha = z.infer<typeof fichaSchema>;
+
+// Seções do corpo da ficha, na ordem do modelo. "Segredo do autor" é opcional.
+export const FICHA_SECTIONS = ["Detalhes", "Relações", "Segredo do autor", "Na história"];

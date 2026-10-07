@@ -6,6 +6,7 @@ Crie a ficha abaixo usando o modelo, em estilo telegráfico (frases curtas, só 
 
 Regras:
 - Use só o que está na minha descrição e no pacote.
+- Cabeçalho completo (`id`, `tipo`, `nome`, `aliases`, `relacionados`) e as seções na ordem do modelo. Em `relacionados` e nos links `[[id]]`, só ids de fichas que já existem.
 - Se precisar completar algo para a ficha fazer sentido, marque a linha com [PROPOSTA] para eu aprovar.
 - Aponte qualquer conflito com a bíblia ou com outras fichas do pacote.
 

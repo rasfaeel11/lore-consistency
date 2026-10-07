@@ -1,14 +1,10 @@
 {
   "permissions": {
     "deny": [
-      "Edit(/biblia.md)",
-      "Edit(/estado.md)",
-      "Edit(/alfabeto.md)",
-      "Edit(/fichas/**)",
-      "Edit(/referencias/**)",
-      "Edit(/capitulos/**)",
       "Edit(/CLAUDE.md)",
       "Edit(/AGENTS.md)",
+      "Edit(/instrucoes-da-historia.md)",
+      "Edit(/.claude/settings.json)",
       "Edit(/lore-pack.config.json)"
     ]
   }

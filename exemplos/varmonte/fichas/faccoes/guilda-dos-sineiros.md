@@ -3,16 +3,27 @@ id: guilda-dos-sineiros
 tipo: faccao
 nome: Guilda dos Sineiros
 aliases: [a Guilda]
-status: existe
-aparece_em: [cap-01]
+relacionados: [oto-varga, sino-mudo]
 ---
-**Essencial (1 linha):** corporação que detém o direito exclusivo de fundir e tocar sinos em Varmonte.
 
-**Fatos** (telegráfico, com capítulo de origem):
-- Diz que não há bronze para refundir o Sino Mudo (cap-01).
+# Guilda dos Sineiros
 
-**Relações:**
-- Oto Varga: membro mais antigo.
+Corporação que detém o direito exclusivo de fundir e tocar sinos em Varmonte.
 
-**Segredos (o leitor ainda não sabe):**
-- Vendeu o bronze reservado para o sino há vinte anos.
+## Detalhes
+
+- **Membro mais antigo:** Oto Varga.
+
+## Relações
+
+[[oto-varga]] · [[sino-mudo]]
+
+## Segredo do autor
+
+> Nunca revelar diretamente no texto.
+
+Vendeu o bronze reservado para o sino há vinte anos.
+
+## Na história
+
+- cap-01: diz que não há bronze para refundir o Sino Mudo.

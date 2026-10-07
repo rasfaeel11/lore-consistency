@@ -12,7 +12,7 @@ Regras:
 - Siga a voz e o ritmo da última cena do pacote.
 - Não avance além das batidas pedidas.
 - Não resolva setups que eu não pedi para pagar.
-- Respeite as fichas: nada de personagem agindo fora da voz, das restrições ou do status dele.
+- Respeite as fichas: nada de personagem agindo fora da voz, das restrições ou do que a ficha diz dele.
 - Crítica política e temas pesados vêm pela situação e pelos personagens, nunca em discurso direto ao leitor.
 
 Depois da cena, após uma linha ---, liste em telegráfico:

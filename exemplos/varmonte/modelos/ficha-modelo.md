@@ -1,24 +1,29 @@
 ---
-id: nome-em-minusculas-com-hifen
+id: nome-em-minusculas-com-hifen   # igual ao nome do arquivo
 tipo: personagem   # personagem | lugar | faccao | objeto | povo | conceito
 nome:
-aliases: []        # outros nomes, apelidos, títulos. Ex.: [o Capitão, Al]
-status:            # vivo, morto, desaparecido... (para lugares/objetos: existe, destruído...)
-aparece_em: []     # [cap-01, cap-03]
+aliases: []        # outros nomes, apelidos, títulos. Ex.: [o Capitão, Al]. Nada genérico ("o rei").
+relacionados: []   # ids de outras fichas ou referências. Ex.: [ana-ferreira, porto-sal]
 ---
-**Essencial (1 linha):**
 
-**Fatos** (telegráfico, com capítulo de origem):
-- 
+# Nome
 
-**Relações:**
-- 
+Resumo em uma ou duas frases: o que é e por que importa.
 
-**Segredos (o leitor ainda não sabe):**
-- 
+## Detalhes
 
-**Voz e maneirismos** (só personagens):
-- 
+- **Campo em negrito:** um fato por linha.
 
-**Não pode** (restrições que a história precisa respeitar):
-- 
+## Relações
+
+<!-- os mesmos ids de "relacionados", como links: [[ana-ferreira]] · [[porto-sal]] -->
+
+## Segredo do autor
+
+> Nunca revelar diretamente no texto.
+
+O que o leitor ainda não sabe. Seção opcional: apague se não houver segredo.
+
+## Na história
+
+Ainda não apareceu.

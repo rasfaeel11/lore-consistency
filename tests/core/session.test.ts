@@ -170,7 +170,7 @@ describe("closeSession", () => {
 describe("buildStartPrompt", () => {
   it("pede para ler o pacote, escrever só no rascunho e no fechamento da sessão", () => {
     expect(buildStartPrompt("2026-10-01-cap-03-01")).toBe(
-      "Leia o arquivo sessoes/2026-10-01-cap-03-01/pacote.md e siga as instruções dele. Escreva o texto das cenas em sessoes/2026-10-01-cap-03-01/rascunho.md e, ao final, as propostas de mudança em sessoes/2026-10-01-cap-03-01/fechamento.md. Não edite nenhum outro arquivo.",
+      "Leia o arquivo sessoes/2026-10-01-cap-03-01/pacote.md e siga as instruções dele. Escreva o texto das cenas em sessoes/2026-10-01-cap-03-01/rascunho.md e, ao final, as propostas de mudança em sessoes/2026-10-01-cap-03-01/fechamento.md. Não edite nenhum outro arquivo sem eu pedir.",
     );
   });
 

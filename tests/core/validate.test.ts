@@ -305,3 +305,94 @@ describe("validateStory: capítulos e sessões", () => {
     expect(problems[0]?.message).toContain("capitulos/cap-01.md");
   });
 });
+
+describe("validateStory: formato novo da ficha", () => {
+  const MODELO = [
+    "# Casa",
+    "",
+    "Resumo.",
+    "",
+    "## Detalhes",
+    "",
+    "- **Sede:** [[porto]].",
+    "",
+    "## Relações",
+    "",
+    "[[porto]] · [[magia]]",
+    "",
+    "## Segredo do autor",
+    "",
+    "> Nunca revelar diretamente no texto.",
+    "",
+    "## Na história",
+    "",
+    "Ainda não apareceu.",
+  ].join("\n");
+  const casa = (header: string, body = MODELO): StoryFile => ({
+    path: "fichas/faccoes/casa.md",
+    content: `---\nid: casa\ntipo: faccao\nnome: Casa\naliases: []\n${header}\n---\n\n${body}\n`,
+  });
+  const porto = ficha("fichas/lugares/porto.md", "id: porto", "tipo: lugar", "nome: Porto");
+  const magia: StoryFile = {
+    path: "referencias/magia.md",
+    content: "---\nid: magia\ntipo: referencia\nnome: Magia\npalavras_chave: [feitiço]\n---\n\n# Magia\n\n## 1. A troca\n",
+  };
+
+  it("ficha no modelo novo, com ids que existem (ficha ou referência), não tem problemas", () => {
+    expect(validateStory([...ROOT, casa("relacionados: [porto, magia]"), porto, magia])).toEqual([]);
+  });
+
+  it("id em relacionados sem ficha nem referência é aviso no campo", () => {
+    const problems = validateStory([...ROOT, casa("relacionados: [porto, censo]", "Corpo."), porto]);
+
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toMatchObject({ path: "fichas/faccoes/casa.md", field: "relacionados", severity: "aviso" });
+    expect(problems[0]?.message).toContain('"censo" está em relacionados');
+  });
+
+  it("link [[id]] no corpo para um id que não existe é aviso, uma vez por id", () => {
+    const problems = validateStory([...ROOT, casa("relacionados: []", "Vive em [[porto]] e em [[ilha]]. Volta a [[ilha]]."), porto]);
+
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toMatchObject({ field: null, severity: "aviso" });
+    expect(problems[0]?.message).toContain("[[ilha]]");
+  });
+
+  it("link para ficha com erro no cabeçalho não conta como quebrado", () => {
+    const quebrada = ficha("fichas/lugares/porto.md", "id: porto", "tipo: lugar");
+
+    const problems = validateStory([...ROOT, casa("relacionados: [porto]", "Corpo."), quebrada]);
+
+    expect(problems.map((p) => p.path)).toEqual(["fichas/lugares/porto.md"]);
+  });
+
+  it("seções do modelo fora de ordem são aviso", () => {
+    const body = "## Na história\n\nNada.\n\n## Detalhes\n\n- **A:** b.";
+
+    const problems = validateStory([...ROOT, casa("relacionados: []", body)]);
+
+    expect(problems).toHaveLength(1);
+    expect(problems[0]?.severity).toBe("aviso");
+    expect(problems[0]?.message).toContain("fora de ordem");
+  });
+
+  it("ficha no formato antigo (títulos em negrito) continua sem problemas", () => {
+    const body = "**Essencial (1 linha):** casa.\n\n**Segredos (o leitor ainda não sabe):**\n- Nada.";
+
+    expect(validateStory([...ROOT, casa("status: existe", body)])).toEqual([]);
+  });
+
+  it('referência com "tipo" diferente de referencia é erro', () => {
+    const problems = validateStory([...ROOT, { ...magia, content: magia.content.replace("tipo: referencia", "tipo: conceito") }]);
+
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toMatchObject({ field: "tipo", severity: "erro" });
+  });
+
+  it("referência com seção de segredo é aviso", () => {
+    const problems = validateStory([...ROOT, { ...magia, content: `${magia.content}\n## Segredo do autor\n\nO Resto pensa.\n` }]);
+
+    expect(problems).toHaveLength(1);
+    expect(problems[0]?.message).toContain("não tem seção de segredos");
+  });
+});

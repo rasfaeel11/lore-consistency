@@ -8,12 +8,20 @@ import { INSTRUCTIONS_DIR } from "./paths.js";
 import { fail, ok, type CliResult } from "./result.js";
 import { findStoryRoot, isFile, readText } from "./story-files.js";
 
+// Regras que o autor escreve para a própria história. Entram no fim do texto gerado.
+export const EXTRAS_FILE = "instrucoes-da-historia.md";
+
 const USAGE = `Uso:
   lore-pack atualizar-instrucoes [pasta] [--sobrescrever]
 
 Grava (ou atualiza) as instruções para a IA na pasta da história: CLAUDE.md e AGENTS.md
-(mesmo texto) e .claude/settings.json (proíbe o Claude Code de editar os arquivos protegidos).
-Serve para pastas criadas antes destes arquivos existirem, ou depois de atualizar o lore-pack.
+(mesmo texto) e .claude/settings.json (proíbe o Claude Code de editar as próprias instruções
+e o lore-pack.config.json). Serve para pastas criadas antes destes arquivos existirem, ou
+depois de atualizar o lore-pack.
+
+Regras só da sua história (línguas, tom, campos próprios das fichas) vão no arquivo
+${EXTRAS_FILE}, na pasta da história. O comando copia o texto dele para o fim do
+CLAUDE.md e do AGENTS.md, e ele nunca é apagado por uma atualização.
 
 Se você editou algum desses arquivos, o comando mostra a diferença e não grava nada.
 
@@ -28,8 +36,11 @@ const HASHES_FILE = "instrucoes.json";
 type Generated = { path: string; content: string };
 
 // Os três arquivos que o lore-pack gera na pasta da história.
-export function instructionFiles(): Generated[] {
-  const text = readText(join(INSTRUCTIONS_DIR, "instrucoes-ia.md"));
+export function instructionFiles(root: string): Generated[] {
+  const extrasPath = join(root, EXTRAS_FILE);
+  const extras = isFile(extrasPath) ? readText(extrasPath).trim() : "";
+  const base = readText(join(INSTRUCTIONS_DIR, "instrucoes-ia.md"));
+  const text = extras === "" ? base : `${base}\n## Regras desta história\nCopiadas de \`${EXTRAS_FILE}\`. Valem junto com as regras acima.\n\n${extras}\n`;
   return [
     { path: "CLAUDE.md", content: text },
     { path: "AGENTS.md", content: text },
@@ -39,7 +50,7 @@ export function instructionFiles(): Generated[] {
 
 // Usado pelo init: a pasta acabou de ser criada, não há o que perguntar.
 export function writeInstructions(root: string): void {
-  const files = instructionFiles();
+  const files = instructionFiles(root);
   for (const file of files) writeGenerated(root, file);
   saveHashes(root, files);
 }
@@ -66,7 +77,7 @@ export function atualizarInstrucoes(args: string[]): CliResult {
 
   // Decide tudo antes de gravar: com um arquivo editado e sem --sobrescrever, nada muda.
   const stored = readHashes(root);
-  const plans: Plan[] = instructionFiles().map((file) => planFor(root, file, stored[file.path]));
+  const plans: Plan[] = instructionFiles(root).map((file) => planFor(root, file, stored[file.path]));
   const edited = plans.filter((plan) => plan.action === "editado");
   if (edited.length > 0 && !parsed.values.sobrescrever) {
     const lines = ["Você editou estes arquivos depois que o lore-pack os gerou:", ""];

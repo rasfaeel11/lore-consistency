@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { cpSync, existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { request, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -266,6 +266,83 @@ describe("terminal embutido", SLOW, () => {
         await openTerminal();
 
         expect(existsSync(join(story, ".lore-pack", "snapshots", OPEN, "manifest.json"))).toBe(true);
+      },
+    );
+  });
+
+  describe("correção do check (POST /api/problemas/terminais)", () => {
+    const breakFicha = () => {
+      mkdirSync(join(story, "fichas", "lugares"), { recursive: true });
+      writeFileSync(join(story, "fichas", "lugares", "ilha.md"), "---\nid: ilha\ntipo: lugar\nnome: Ilha\nrelacionados: [farol]\n---\n");
+    };
+
+    it("com o terminal desligado, recusa e não grava nada na pasta", async () => {
+      breakFicha();
+      config({ comando: "nenhum" });
+      await start();
+
+      const response = await api("/api/problemas/terminais", { method: "POST", body: "{}" });
+
+      expect(response.status).toBe(409);
+      expect(existsSync(join(story, ".lore-pack", "correcao.md"))).toBe(false);
+    });
+
+    it.skipIf(!ptyAvailable)(
+      "grava o pedido, abre a IA com ele, mostra o que ela mudou e desfaz",
+      async () => {
+        breakFicha();
+        nodeScript("mexe");
+        await start();
+        const before = readFileSync(join(story, "estado.md"), "utf8");
+
+        const response = await api("/api/problemas/terminais", { method: "POST", body: "{}" });
+        expect(response.status).toBe(201);
+        const client = connect((await response.json()).id);
+        await client.waitFor(() => client.messages.some((m) => m.tipo === "guarda"), "a guarda da correção");
+
+        expect(readFileSync(join(story, ".lore-pack", "correcao.md"), "utf8")).toContain('"farol" está em relacionados');
+        expect(client.messages.find((m) => m.tipo === "guarda")?.mudancas).toEqual(["estado.md"]);
+        const view = await (await api("/api/problemas")).json();
+        expect(view.mudancas.map((m: { arquivo: string }) => m.arquivo)).toEqual(["estado.md"]);
+
+        const reverted = await api("/api/problemas/reverter", { method: "POST", body: "{}" });
+        expect(reverted.status).toBe(200);
+        expect((await reverted.json()).mudancas).toEqual([]);
+        expect(readFileSync(join(story, "estado.md"), "utf8")).toBe(before);
+        client.ws.close();
+      },
+    );
+
+    it.skipIf(!ptyAvailable)(
+      "o terminal da correção recebe o prompt que manda ler o pedido",
+      async () => {
+        breakFicha();
+        nodeScript("eco");
+        await start();
+
+        const response = await api("/api/problemas/terminais", { method: "POST", body: "{}" });
+        const client = connect((await response.json()).id);
+        await client.waitFor(() => client.messages.some((m) => m.tipo === "fim"), "o fim do processo");
+
+        expect(client.output()).toContain("PROMPT:Leia o arquivo .lore-pack/correcao.md");
+        expect((await (await api("/api/terminais")).json())[0].sessao).toBe("correcao");
+        client.ws.close();
+      },
+    );
+
+    it.skipIf(!ptyAvailable)(
+      "com uma correção rodando, recusa abrir outra e recusa desfazer",
+      async () => {
+        breakFicha();
+        nodeScript("vivo");
+        await start();
+        await api("/api/problemas/terminais", { method: "POST", body: "{}" });
+
+        const again = await api("/api/problemas/terminais", { method: "POST", body: "{}" });
+        const revert = await api("/api/problemas/reverter", { method: "POST", body: "{}" });
+
+        expect(again.status).toBe(409);
+        expect(revert.status).toBe(409);
       },
     );
   });

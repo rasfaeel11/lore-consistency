@@ -3,7 +3,7 @@
 
 const $ = (id) => document.getElementById(id);
 
-let historia = { nome: "", capitulos: [], referencias: [], erros: 0 };
+let historia = { nome: "", pasta: "", capitulos: [], referencias: [], erros: 0, avisos: 0 };
 // Resumo do pack logo depois de criar uma sessão, para mostrar uma vez.
 let ultimoResumo = null;
 
@@ -26,9 +26,16 @@ async function carregarHistoria() {
   $("nome-historia").textContent = historia.nome;
   document.title = `${historia.nome} · lore-pack`;
 
+  $("abrir-pasta").title = historia.pasta;
+  // Erro trava o pack; aviso não trava, mas também aparece e também dá para pedir a correção.
+  const erros = historia.erros === 1 ? "1 erro" : `${historia.erros} erros`;
+  const avisos = historia.avisos === 1 ? "1 aviso" : `${historia.avisos} avisos`;
+  const tem = historia.erros + historia.avisos > 0;
   const aviso = $("aviso-erros");
-  aviso.hidden = historia.erros === 0;
-  aviso.textContent = `A pasta tem ${historia.erros === 1 ? "1 erro" : `${historia.erros} erros`}. Rode "lore-pack check" no terminal para ver e corrigir.`;
+  aviso.hidden = !tem;
+  aviso.className = historia.erros > 0 ? "aviso" : "dica";
+  aviso.textContent = `O check achou ${erros} e ${avisos} na pasta.`;
+  $("botao-problemas").hidden = !tem;
 
   desenharBarra();
 }
@@ -79,22 +86,30 @@ function desenharBarra() {
   }
 }
 
-// Rotas pelo "#" do endereço: #nova, #sessao/<id> ou vazio.
+// Dono dos terminais da correção do check, igual ao FIX_ID do servidor. Não é id de sessão.
+const CORRECAO = "correcao";
+
+// Rotas pelo "#" do endereço: #nova, #problemas, #sessao/<id> ou vazio.
+// O id é o dono dos terminais da tela: a sessão, ou a correção do check.
 function rotaAtual() {
   const hash = decodeURIComponent(location.hash.slice(1));
   if (hash === "nova") return { tipo: "nova" };
+  if (hash === "problemas") return { tipo: "problemas", id: CORRECAO };
   if (hash.startsWith("sessao/")) return { tipo: "sessao", id: hash.slice("sessao/".length) };
   return { tipo: "inicio" };
 }
 
 function mostrar(secao) {
-  for (const id of ["inicio", "nova", "sessao"]) $(id).hidden = id !== secao;
+  for (const id of ["inicio", "nova", "problemas", "sessao"]) $(id).hidden = id !== secao;
+  // O painel do terminal é um só: vai para a tela que está aberta (sessão ou problemas).
+  if (secao === "sessao" || secao === "problemas") $(secao).append($("painel-terminal"));
 }
 
 async function navegar() {
   const rota = rotaAtual();
   desenharBarra();
   if (rota.tipo === "nova") return mostrarNova();
+  if (rota.tipo === "problemas") return mostrarProblemas();
   if (rota.tipo === "sessao") return mostrarSessao(rota.id);
   mostrar("inicio");
 }
@@ -171,6 +186,99 @@ async function mostrarSessao(id) {
   // Depois de mostrar: o terminal só sabe o próprio tamanho quando está visível.
   await mostrarTerminais(id);
 }
+
+// --- Problemas do check e a correção com a IA ---
+
+async function mostrarProblemas() {
+  $("problemas-status").textContent = "";
+  mostrar("problemas");
+  await carregarProblemas();
+  await mostrarTerminais(CORRECAO);
+}
+
+let pedidoCorrecao = null;
+
+async function carregarProblemas() {
+  let dados;
+  try {
+    dados = await api("/api/problemas");
+  } catch (erro) {
+    $("problemas-status").textContent = erro.message;
+    return;
+  }
+  desenharProblemas(dados);
+}
+
+function desenharProblemas(dados) {
+  pedidoCorrecao = dados.pedido;
+  const tem = dados.erros + dados.avisos > 0;
+  $("problemas-resumo").textContent = tem
+    ? "Erro impede o pack de montar o pacote. Aviso não impede, mas costuma confundir a IA."
+    : "Nenhum problema na pasta.";
+  $("problemas-relatorio").textContent = dados.relatorio;
+  $("resolver").disabled = !tem;
+  $("copiar-pedido").disabled = !tem;
+
+  confirmarDesfazer(false);
+  $("problemas-mudancas").hidden = dados.mudancas.length === 0;
+  if (dados.mudancas.length === 0) return;
+  const quantos = dados.mudancas.length === 1 ? "1 arquivo mudou" : `${dados.mudancas.length} arquivos mudaram`;
+  $("problemas-titulo").textContent = `${quantos} desde a última correção pedida (${new Date(dados.desde).toLocaleString("pt-BR")}). Confira antes de continuar.`;
+  $("problemas-confirmar").textContent = `Confirmar: voltar ${dados.mudancas.length === 1 ? "o arquivo" : `os ${dados.mudancas.length} arquivos`} ao que era antes da correção`;
+  const lista = $("problemas-lista");
+  lista.replaceChildren();
+  for (const mudanca of dados.mudancas) {
+    const titulo = document.createElement("h4");
+    titulo.textContent = `${mudanca.tipo}: ${mudanca.arquivo}`;
+    lista.append(titulo, desenharDiff(mudanca.diff));
+  }
+}
+
+function confirmarDesfazer(sim) {
+  $("problemas-reverter").hidden = sim;
+  $("problemas-confirmar").hidden = !sim;
+  $("problemas-cancelar").hidden = !sim;
+}
+
+$("botao-problemas").addEventListener("click", () => (location.hash = "#problemas"));
+$("resolver").addEventListener("click", () => abrirTerminal());
+$("copiar-pedido").addEventListener("click", () =>
+  copiar(pedidoCorrecao ?? "", "Pedido copiado. Cole na conversa com a IA, aberta na pasta da história.", "problemas-status"),
+);
+$("problemas-reler").addEventListener("click", async () => {
+  await carregarHistoria();
+  await carregarProblemas();
+  $("problemas-status").textContent = "Check rodado de novo.";
+});
+$("problemas-reverter").addEventListener("click", () => confirmarDesfazer(true));
+$("problemas-cancelar").addEventListener("click", () => confirmarDesfazer(false));
+$("problemas-confirmar").addEventListener("click", async () => {
+  try {
+    const dados = await api("/api/problemas/reverter", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    desenharProblemas(dados);
+    await carregarHistoria();
+    $("problemas-status").textContent = `Desfeito: ${dados.arquivos.map((a) => a.arquivo).join(", ")}.`;
+  } catch (erro) {
+    $("problemas-status").textContent = erro.message;
+  }
+});
+
+$("abrir-pasta").addEventListener("click", async () => {
+  try {
+    const { pasta } = await api("/api/pasta/abrir", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    $("pasta-status").textContent = `Aberta: ${pasta}`;
+  } catch (erro) {
+    $("pasta-status").textContent = erro.message;
+  }
+});
 
 // --- Guarda do cânone ---
 
@@ -613,11 +721,13 @@ function conectar(t) {
       t.codigo = mensagem.codigo;
       t.term.write(`\r\n\x1b[2m[programa encerrado, código ${mensagem.codigo}]\x1b[0m\r\n`);
       desenharAbas(rotaAtual().id);
+      // A correção terminou: roda o check de novo e mostra o que ela mudou.
+      if (t.sessao === CORRECAO) carregarHistoria().then(() => rotaAtual().tipo === "problemas" && carregarProblemas());
       // A IA pode ter acabado de escrever o fechamento.md.
-      if (rotaAtual().id === t.sessao) carregarFechamento();
+      else if (rotaAtual().id === t.sessao) carregarFechamento();
     }
     // A guarda comparou quando o programa terminou: se algo mudou, mostra o aviso da sessão.
-    if (mensagem.tipo === "guarda" && mensagem.mudancas.length > 0 && rotaAtual().id === t.sessao) verificarGuarda();
+    if (mensagem.tipo === "guarda" && mensagem.mudancas.length > 0 && t.sessao !== CORRECAO && rotaAtual().id === t.sessao) verificarGuarda();
   });
   ws.addEventListener("close", () => {
     if (t.rodando && terminais.has(t.id)) {
@@ -723,14 +833,17 @@ async function fecharTerminal(t) {
   desenharAbas(rotaAtual().id);
 }
 
-$("abrir-terminal").addEventListener("click", async () => {
-  const sessaoId = rotaAtual().id;
+// Na tela de problemas, o terminal novo é uma correção: o servidor monta o pedido e abre a IA com ele.
+async function abrirTerminal() {
+  const rota = rotaAtual();
+  const sessaoId = rota.id;
+  const caminho = rota.tipo === "problemas" ? "/api/problemas/terminais" : `/api/sessoes/${encodeURIComponent(sessaoId)}/terminais`;
   const botao = $("abrir-terminal");
   botao.disabled = true;
   avisoTerminal(null);
   try {
     // Só o id da sessão: qual programa roda é decidido pelo lore-pack.config.json, no servidor.
-    const { id } = await api(`/api/sessoes/${encodeURIComponent(sessaoId)}/terminais`, {
+    const { id } = await api(caminho, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: "{}",
@@ -744,7 +857,9 @@ $("abrir-terminal").addEventListener("click", async () => {
   } finally {
     botao.disabled = false;
   }
-});
+}
+
+$("abrir-terminal").addEventListener("click", abrirTerminal);
 
 window.addEventListener("hashchange", navegar);
 

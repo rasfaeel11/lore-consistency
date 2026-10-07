@@ -25,12 +25,15 @@ describe("servidor do app", () => {
   let story: string;
   let server: Server;
   let base: string;
+  // Pastas que o app pediu para abrir no gerenciador de arquivos.
+  let opened: string[];
 
   beforeEach(async () => {
     tempDir = mkdtempSync(join(tmpdir(), "lore-pack-"));
     story = join(tempDir, "historia");
     cpSync(HISTORIA, story, { recursive: true });
-    server = createAppServer(story, TOKEN);
+    opened = [];
+    server = createAppServer(story, TOKEN, { openFolder: (folder) => opened.push(folder) });
     base = await listen(server, 0);
   });
 
@@ -169,6 +172,66 @@ describe("servidor do app", () => {
     });
   });
 
+  describe("POST /api/pasta/abrir", () => {
+    it("abre a pasta da história, sem aceitar caminho do navegador", async () => {
+      const response = await postJson("/api/pasta/abrir", { pasta: tempDir });
+
+      expect(response.status).toBe(200);
+      expect((await response.json()).pasta).toBe(story);
+      expect(opened).toEqual([story]);
+    });
+
+    it("sem token, ou sem ser JSON, não abre nada", async () => {
+      const semToken = await globalThis.fetch(`${base}/api/pasta/abrir`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+      const formulario = await fetch(`${base}/api/pasta/abrir`, { method: "POST", body: "a=1" });
+
+      expect(semToken.status).toBe(401);
+      expect(formulario.status).toBe(415);
+      expect(opened).toEqual([]);
+    });
+  });
+
+  describe("problemas do check", () => {
+    function breakFicha() {
+      mkdirSync(join(story, "fichas", "lugares"), { recursive: true });
+      writeFileSync(join(story, "fichas", "lugares", "ilha.md"), "---\nid: ilha\ntipo: lugar\nnome: Ilha\nrelacionados: [farol-que-nao-existe]\n---\n");
+    }
+
+    it("pasta sem problemas: relatório limpo e nenhum pedido", async () => {
+      const body = await (await fetch(`${base}/api/problemas`)).json();
+
+      expect(body).toMatchObject({ erros: 0, avisos: 0, pedido: null, mudancas: [], desde: null });
+      expect(body.relatorio).toContain("Tudo certo");
+    });
+
+    it("com problemas: conta erros e avisos e monta o pedido para a IA", async () => {
+      breakFicha();
+
+      const body = await (await fetch(`${base}/api/problemas`)).json();
+      const historia = await (await fetch(`${base}/api/historia`)).json();
+
+      expect(body).toMatchObject({ erros: 0, avisos: 1 });
+      expect(body.relatorio).toContain("farol-que-nao-existe");
+      expect(body.pedido).toContain("farol-que-nao-existe");
+      expect(body.pedido).toContain("sem inventar nada");
+      expect(historia.avisos).toBe(1);
+    });
+
+    it("sem problemas, não abre correção nem grava o pedido", async () => {
+      const response = await postJson("/api/problemas/terminais", {});
+
+      expect(response.status).toBe(409);
+      expect(existsSync(join(story, ".lore-pack", "correcao.md"))).toBe(false);
+    });
+
+    it("desfazer sem nenhuma correção pedida dá 409", async () => {
+      const response = await postJson("/api/problemas/reverter", {});
+
+      expect(response.status).toBe(409);
+      expect((await response.json()).erro).toContain("não há o que desfazer");
+    });
+  });
+
   describe("GET /api/sessoes/:id", () => {
     it("devolve o cabeçalho, o corpo e o comando de início", async () => {
       const response = await fetch(`${base}/api/sessoes/${OPEN}`);
@@ -177,7 +240,7 @@ describe("servidor do app", () => {
       expect(response.status).toBe(200);
       expect(body).toMatchObject({ id: OPEN, capitulo: "cap-02", status: "aberta" });
       expect(body.corpo).toContain("## Plano");
-      expect(body.comando).toBe(`claude "Leia o arquivo sessoes/${OPEN}/pacote.md e siga as instruções dele. Escreva o texto das cenas em sessoes/${OPEN}/rascunho.md e, ao final, as propostas de mudança em sessoes/${OPEN}/fechamento.md. Não edite nenhum outro arquivo."`);
+      expect(body.comando).toBe(`claude "Leia o arquivo sessoes/${OPEN}/pacote.md e siga as instruções dele. Escreva o texto das cenas em sessoes/${OPEN}/rascunho.md e, ao final, as propostas de mudança em sessoes/${OPEN}/fechamento.md. Não edite nenhum outro arquivo sem eu pedir."`);
     });
 
     it("sessão inexistente ou id inválido dá 404 com mensagem", async () => {

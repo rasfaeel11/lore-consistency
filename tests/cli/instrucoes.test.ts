@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -26,27 +26,51 @@ describe("instruções para a IA", () => {
   const update = (...args: string[]) => main(["atualizar-instrucoes", ...args, story], "0.0.0");
 
   describe("init", () => {
-    it("cria CLAUDE.md e AGENTS.md iguais, com as regras duras", () => {
+    it("cria CLAUDE.md e AGENTS.md iguais, com o formato novo e as regras", () => {
       main(["init", story], "0.0.0");
 
       const claude = read("CLAUDE.md");
       expect(read("AGENTS.md")).toBe(claude);
-      expect(claude).toContain("Nunca edite diretamente `biblia.md`, `estado.md`, `alfabeto.md`");
+      expect(claude).toContain("relacionados: [oto-varga, sino-mudo]");
+      expect(claude).toContain("## Segredo do autor");
+      expect(claude).toContain("## Na história");
+      expect(claude).toContain("tipo: referencia");
       expect(claude).toContain("sessoes/<id>/rascunho.md");
       expect(claude).toContain("sessoes/<id>/fechamento.md");
-      expect(claude).toContain("Segredos");
+      expect(claude).toContain("**Com pedido do autor:**");
       expect(claude).toContain("pergunte em vez de inventar");
-      expect(claude).toContain("povo, conceito");
-      expect(claude.split("\n").length).toBeLessThanOrEqual(65);
+      expect(claude).toContain("rode `lore-pack check`");
+      // É lido em toda conversa: não pode crescer sem ninguém ver.
+      expect(claude.split("\n").length).toBeLessThanOrEqual(125);
     });
 
-    it("cria o .claude/settings.json que nega edição dos arquivos protegidos", () => {
+    it("o .claude/settings.json deixa a IA editar o cânone, mas não as próprias regras", () => {
       main(["init", story], "0.0.0");
 
-      const settings = JSON.parse(read(".claude/settings.json"));
-      expect(settings.permissions.deny).toEqual(
-        expect.arrayContaining(["Edit(/biblia.md)", "Edit(/fichas/**)", "Edit(/capitulos/**)", "Edit(/CLAUDE.md)"]),
+      const deny: string[] = JSON.parse(read(".claude/settings.json")).permissions.deny;
+      expect(deny).toEqual(
+        expect.arrayContaining(["Edit(/CLAUDE.md)", "Edit(/AGENTS.md)", "Edit(/.claude/settings.json)", "Edit(/lore-pack.config.json)"]),
       );
+      expect(deny.some((rule) => /biblia|estado|fichas|referencias|capitulos/.test(rule))).toBe(false);
+    });
+
+    it("os exemplos de ficha e de referência do CLAUDE.md passam no check", () => {
+      main(["init", story], "0.0.0");
+      // Os blocos recuados com quatro espaços que começam em "---" são os exemplos.
+      const blocks = [...read("CLAUDE.md").matchAll(/(?:^ {4}.*\n|^\n)+/gm)]
+        .map((match) => match[0].replace(/^ {4}/gm, "").trim())
+        .filter((block) => block.startsWith("---"));
+      expect(blocks).toHaveLength(2);
+      mkdirSync(join(story, "fichas", "faccoes"), { recursive: true });
+      mkdirSync(join(story, "fichas", "personagens"), { recursive: true });
+      mkdirSync(join(story, "fichas", "objetos"), { recursive: true });
+      mkdirSync(join(story, "referencias"), { recursive: true });
+      writeFileSync(join(story, "fichas", "faccoes", "guilda-dos-sineiros.md"), `${blocks[0]}\n`);
+      writeFileSync(join(story, "fichas", "personagens", "oto-varga.md"), "---\nid: oto-varga\ntipo: personagem\nnome: Oto Varga\n---\n");
+      writeFileSync(join(story, "fichas", "objetos", "sino-mudo.md"), "---\nid: sino-mudo\ntipo: objeto\nnome: Sino Mudo\n---\n");
+      writeFileSync(join(story, "referencias", "sinos.md"), `${blocks[1]}\n`);
+
+      expect(main(["check", story], "0.0.0").stdout).toBe("Tudo certo: 3 fichas validadas, 1 referência validada.\n");
     });
 
     it("a pasta criada continua passando no check", () => {
@@ -57,6 +81,22 @@ describe("instruções para a IA", () => {
   });
 
   describe("atualizar-instrucoes", () => {
+    it("copia o instrucoes-da-historia.md para o fim do CLAUDE.md e do AGENTS.md, e não mexe nele", () => {
+      main(["init", story], "0.0.0");
+      const extras = "- Nome antigo vai no campo `nome_antigo` da ficha.\n";
+      writeFileSync(join(story, "instrucoes-da-historia.md"), extras);
+
+      const result = update();
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("atualizado: CLAUDE.md");
+      expect(read("CLAUDE.md")).toContain("## Regras desta história");
+      expect(read("CLAUDE.md").endsWith(extras)).toBe(true);
+      expect(read("AGENTS.md")).toBe(read("CLAUDE.md"));
+      expect(read("instrucoes-da-historia.md")).toBe(extras);
+      expect(update().stdout).toContain("já estão atualizados");
+    });
+
     it("em pasta recém-criada, diz que já está tudo atualizado e não muda nada", () => {
       main(["init", story], "0.0.0");
       const before = read("CLAUDE.md");

@@ -9,6 +9,7 @@ const PROTECTED_FILES = [
   "alfabeto.md",
   "CLAUDE.md",
   "AGENTS.md",
+  "instrucoes-da-historia.md",
   ".claude/settings.json",
   "lore-pack.config.json",
 ];

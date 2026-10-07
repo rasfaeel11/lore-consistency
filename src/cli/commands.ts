@@ -1,4 +1,5 @@
 import { parseArgs } from "node:util";
+import { abrir } from "./abrir.js";
 import { apply } from "./apply.js";
 import { capitulo } from "./capitulo.js";
 import { check } from "./check.js";
@@ -59,6 +60,12 @@ export const COMMANDS: Command[] = [
     usage: "atualizar-instrucoes [pasta]",
     summary: 'atualiza o CLAUDE.md, o AGENTS.md e o .claude/settings.json da história (veja "--help")',
     run: atualizarInstrucoes,
+  },
+  {
+    name: "abrir",
+    usage: "abrir [pasta]",
+    summary: "abre a pasta da história no gerenciador de arquivos",
+    run: (args) => abrir(args),
   },
   {
     // Deixa um servidor rodando, por isso é assíncrono.

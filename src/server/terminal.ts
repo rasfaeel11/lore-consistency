@@ -94,11 +94,12 @@ export class TerminalManager {
     return ready.ok ? { ligado: true, comando: ready.command.path } : { ligado: false, motivo: ready.error };
   }
 
-  async open(sessionId: string): Promise<OpenResult> {
+  // sessionId é o dono do terminal: uma sessão de escrita ou a correção do check (FIX_ID).
+  async open(sessionId: string, prompt: string = buildStartPrompt(sessionId)): Promise<OpenResult> {
     const ready = await this.prepare();
     if (!ready.ok) return { ok: false, status: ready.status, error: ready.error };
 
-    const args = fillArgs(ready.args, buildStartPrompt(sessionId));
+    const args = fillArgs(ready.args, prompt);
     if (ready.command.batch) {
       const problem = batchArgsProblem(args);
       if (problem) return { ok: false, status: 409, error: problem };

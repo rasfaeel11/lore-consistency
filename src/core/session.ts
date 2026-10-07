@@ -152,7 +152,7 @@ export function buildStartPrompt(id: string): string {
   return (
     `Leia o arquivo ${folder}/pacote.md e siga as instruções dele. ` +
     `Escreva o texto das cenas em ${folder}/rascunho.md e, ao final, as propostas de mudança em ${folder}/fechamento.md. ` +
-    "Não edite nenhum outro arquivo."
+    "Não edite nenhum outro arquivo sem eu pedir."
   );
 }
 
@@ -165,7 +165,7 @@ export function buildSessionFilesBlock(id: string): string {
     "Se você consegue ler e escrever arquivos nesta pasta (por exemplo, no Claude Code):",
     `- Escreva o texto das cenas em ${folder}/rascunho.md.`,
     `- Ao final, escreva as propostas de mudança em ${folder}/fechamento.md, no formato de prompts-de-sessao/04-fechar-sessao.md.`,
-    "- Não edite nenhum outro arquivo. Nada vira cânone sem a minha aprovação.",
+    "- Não edite nenhum outro arquivo sem eu pedir. Nada vira cânone sem a minha aprovação.",
     "",
   ].join("\n");
 }

@@ -3,17 +3,29 @@ id: sino-mudo
 tipo: objeto
 nome: Sino Mudo
 aliases: [o Mudo]
-status: rachado
-aparece_em: [cap-01]
+relacionados: [fundicao-alta, sinos]
 ---
-**Essencial (1 linha):** o maior sino de Varmonte, rachado há vinte anos, que avisava a cheia.
 
-**Fatos** (telegráfico, com capítulo de origem):
-- Fica na torre da Fundição Alta (cap-01).
-- Ninguém o ouve desde a cheia de vinte anos atrás (cap-01).
+# Sino Mudo
 
-**Segredos (o leitor ainda não sabe):**
-- A rachadura foi feita de propósito.
+O maior sino de Varmonte, rachado há vinte anos, que avisava a cheia.
 
-**Não pode** (restrições que a história precisa respeitar):
-- Rachado, não soa: só estala.
+## Detalhes
+
+- **Onde fica:** na torre da Fundição Alta.
+- **Estado:** rachado; ninguém o ouve desde a cheia de vinte anos atrás.
+- **Não pode:** rachado, não soa: só estala.
+
+## Relações
+
+[[fundicao-alta]] · [[sinos]]
+
+## Segredo do autor
+
+> Nunca revelar diretamente no texto.
+
+A rachadura foi feita de propósito: um sino pode ser rachado sem marca visível, esfriando a boca com água logo depois do toque.
+
+## Na história
+
+- cap-01: Lia vê a torre trancada onde ele fica.

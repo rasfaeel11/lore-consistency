@@ -41,7 +41,7 @@ describe("init", () => {
 
     const abrir = readFileSync(join(target, "prompts-de-sessao", "00-abrir-sessao.md"), "utf8");
     expect(abrir).toContain(
-      "As seções de Segredos das fichas e das referências servem para manter a coerência. Nunca revele o conteúdo delas no texto da história sem eu pedir; pode insinuar se eu orientar.",
+      'Os segredos do autor (na bíblia e nas seções "Segredo do autor" das fichas) servem para manter a coerência. Nunca revele o conteúdo deles no texto da história sem eu pedir; pode insinuar se eu orientar.',
     );
   });
 

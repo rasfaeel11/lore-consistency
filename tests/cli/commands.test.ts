@@ -22,7 +22,7 @@ describe("lista de comandos", () => {
   it("a lista tem os comandos esperados, sem repetir nome", () => {
     const names = COMMANDS.map((c) => c.name);
 
-    expect(names).toEqual(["init", "check", "pack", "capitulo", "sessao", "apply", "atualizar-instrucoes", "ui"]);
+    expect(names).toEqual(["init", "check", "pack", "capitulo", "sessao", "apply", "atualizar-instrucoes", "abrir", "ui"]);
     expect(new Set(names).size).toBe(names.length);
   });
 });

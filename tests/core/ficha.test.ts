@@ -19,8 +19,22 @@ describe("fichaSchema", () => {
       tipo: "personagem",
       nome: "Ana",
       aliases: [],
+      relacionados: [],
       aparece_em: [],
     });
+  });
+
+  it("aceita relacionados e deixa passar campos próprios da história", () => {
+    const result = fichaSchema.safeParse({
+      id: "ana",
+      tipo: "personagem",
+      nome: "Ana",
+      relacionados: ["porto-sal"],
+      nome_antigo: "Anael",
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.data?.relacionados).toEqual(["porto-sal"]);
   });
 
   it("aceita campos opcionais vazios, como vêm do modelo de ficha", () => {

@@ -8,12 +8,15 @@ import { WebSocketServer } from "ws";
 import { basename, join } from "node:path";
 import { buildFixPrompt, extractChanges } from "../core/changes.js";
 import { listChapters } from "../core/chapters.js";
+import { FIX_FILE, FIX_ID, FIX_START_PROMPT, buildFixRequest } from "../core/fix.js";
 import { buildStartPrompt, isSessionId, listSessions, readSession } from "../core/session.js";
 import { readReferencias, validateStory } from "../core/validate.js";
 import { applyClosing, readClosing } from "../cli/apply.js";
+import { formatReport } from "../cli/check.js";
+import { openFolder } from "../cli/open-browser.js";
 import { readPackOptions } from "../cli/pack.js";
 import { WEB_DIR } from "../cli/paths.js";
-import { checkGuard, hasSnapshot, keepChanges, revertChanges, takeSnapshot } from "../cli/guard.js";
+import { checkGuard, ensureLorePackDir, hasSnapshot, keepChanges, revertChanges, takeSnapshot } from "../cli/guard.js";
 import { closeSessionFolder, createSession, deleteSession } from "../cli/sessao.js";
 import { isFile, readStoryFiles, readText } from "../cli/story-files.js";
 import { TerminalManager, loadNodePty, type PtyLoad } from "./terminal.js";
@@ -54,13 +57,21 @@ const TERMINAL_SOCKET_ROUTE = /^\/ws\/terminais\/([^/]+)$/;
 // Mensagem do navegador para o terminal: digitação e tamanho da tela. 64 KB sobra.
 const MAX_SOCKET_MESSAGE = 64 * 1024;
 
-type App = { root: string; token: string; terminals: TerminalManager; sockets: WebSocketServer };
+type App = {
+  root: string;
+  token: string;
+  terminals: TerminalManager;
+  sockets: WebSocketServer;
+  openFolder: (folder: string) => void;
+};
 // Cada servidor guarda o seu app, para o shutdownApp achar os terminais dele.
 const apps = new WeakMap<Server, App>();
 
 export type AppOptions = {
   // Os testes trocam para simular o node-pty ausente.
   loadPty?: () => Promise<PtyLoad>;
+  // Os testes trocam para não abrir o gerenciador de arquivos de verdade.
+  openFolder?: (folder: string) => void;
 };
 
 export function createAppServer(root: string, token: string, options: AppOptions = {}): Server {
@@ -69,6 +80,7 @@ export function createAppServer(root: string, token: string, options: AppOptions
     token,
     terminals: new TerminalManager(root, options.loadPty ?? loadNodePty),
     sockets: new WebSocketServer({ noServer: true, maxPayload: MAX_SOCKET_MESSAGE }),
+    openFolder: options.openFolder ?? openFolder,
   };
   const server = createServer((req, res) => {
     handle(app, server, req, res).catch((error: unknown) => {
@@ -160,6 +172,26 @@ async function handle(app: App, server: Server, req: IncomingMessage, res: Serve
   if (method === "GET" && path === "/api/historia") return sendJson(res, 200, storySummary(root));
   if (method === "POST" && path === "/api/sessoes") return postSession(root, req, res);
 
+  // Abre a pasta da história no gerenciador de arquivos. O navegador não manda caminho nenhum:
+  // a pasta é sempre a que o "lore-pack ui" recebeu.
+  if (method === "POST" && path === "/api/pasta/abrir") {
+    if (!isJson(req)) return sendJson(res, 415, { erro: "Mande os dados como JSON." });
+    app.openFolder(root);
+    return sendJson(res, 200, { pasta: root });
+  }
+
+  // Problemas do check e a correção com a IA. Como no terminal das sessões, o navegador só
+  // dispara: o pedido é montado aqui, a partir do check rodado aqui.
+  if (method === "GET" && path === "/api/problemas") return sendJson(res, 200, problemsView(root));
+  if (method === "POST" && (path === "/api/problemas/terminais" || path === "/api/problemas/reverter")) {
+    if (!isJson(req)) return sendJson(res, 415, { erro: "Mande os dados como JSON." });
+    // O snapshot da correção é um só: outra conversa ao mesmo tempo esconderia o que a primeira mudou.
+    if (app.terminals.list().some((t) => t.sessao === FIX_ID && t.rodando)) {
+      return sendJson(res, 409, { erro: "Já há uma correção rodando. Espere ela terminar ou feche o terminal dela." });
+    }
+    return path.endsWith("/reverter") ? postFixRevert(root, res) : postFixTerminal(app, res);
+  }
+
   // Terminal embutido. O navegador só diz QUAL sessão: o corpo do pedido é ignorado, e
   // comando, argumentos, pasta e ambiente vêm do lore-pack.config.json e do servidor.
   if (method === "GET" && path === "/api/terminal") return sendJson(res, 200, await app.terminals.status());
@@ -246,8 +278,53 @@ function storySummary(root: string) {
   }
 
   const referencias = readReferencias(files).map((r) => ({ id: r.referencia.id, nome: r.referencia.nome }));
-  const erros = validateStory(files).filter((problem) => problem.severity === "erro").length;
-  return { nome: basename(root), capitulos, referencias, erros };
+  const problems = validateStory(files);
+  const erros = problems.filter((problem) => problem.severity === "erro").length;
+  return { nome: basename(root), pasta: root, capitulos, referencias, erros, avisos: problems.length - erros };
+}
+
+// --- Problemas do check, e a correção com a IA numa conversa nova ---
+
+function problemsView(root: string) {
+  const files = readStoryFiles(root);
+  const problems = validateStory(files);
+  const erros = problems.filter((problem) => problem.severity === "erro").length;
+  const report = formatReport(problems, files);
+  // O que mudou desde a última correção pedida (sem nenhuma, não há o que mostrar).
+  const guard = checkGuard(root, FIX_ID);
+  return {
+    erros,
+    avisos: problems.length - erros,
+    relatorio: report,
+    // Para colar em outra IA, quando o terminal está desligado.
+    pedido: problems.length > 0 ? buildFixRequest(report) : null,
+    desde: guard?.since ?? null,
+    mudancas: (guard?.changes ?? []).map((change) => ({ arquivo: change.path, tipo: change.kind, diff: change.diff })),
+  };
+}
+
+// Grava o pedido em .lore-pack/correcao.md, guarda uma cópia dos arquivos e abre a IA.
+async function postFixTerminal(app: App, res: ServerResponse): Promise<void> {
+  const view = problemsView(app.root);
+  if (view.pedido === null) return sendJson(res, 409, { erro: "O check não achou nenhum problema: não há o que corrigir." });
+  // Confere antes de gravar qualquer coisa: com o terminal desligado, nada muda na pasta.
+  const status = await app.terminals.status();
+  if (!status.ligado) return sendJson(res, 409, { erro: status.motivo });
+
+  ensureLorePackDir(app.root);
+  writeFileSync(join(app.root, FIX_FILE), view.pedido);
+  // Snapshot novo a cada correção: o "Desfazer" volta ao estado de antes desta conversa.
+  takeSnapshot(app.root, FIX_ID);
+
+  const opened = await app.terminals.open(FIX_ID, FIX_START_PROMPT);
+  return opened.ok ? sendJson(res, 201, { id: opened.id }) : sendJson(res, opened.status, { erro: opened.error });
+}
+
+// O segundo clique em "Desfazer" na página é a confirmação do princípio 4.
+function postFixRevert(root: string, res: ServerResponse): void {
+  if (!hasSnapshot(root, FIX_ID)) return sendJson(res, 409, { erro: "Nenhuma correção foi pedida ainda: não há o que desfazer." });
+  const changes = revertChanges(root, FIX_ID);
+  sendJson(res, 200, { arquivos: changes.map((change) => ({ arquivo: change.path, tipo: change.kind })), ...problemsView(root) });
 }
 
 function getSession(root: string, id: string, res: ServerResponse): void {

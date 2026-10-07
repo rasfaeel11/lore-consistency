@@ -2,6 +2,19 @@
 
 As mudanças de cada versão. O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e os números seguem o [versionamento semântico](https://semver.org/lang/pt-BR/). Enquanto a versão começar com 0, o formato dos arquivos e os comandos ainda podem mudar entre versões menores.
 
+## [Não publicado]
+
+### Adicionado
+- Formato novo da ficha: campo `relacionados`, links `[[id]]` e corpo em seções (`## Detalhes`, `## Relações`, `## Segredo do autor`, `## Na história`). Referências ganham `tipo: referencia` e deixam de ter seção de segredos. As fichas do formato antigo continuam válidas.
+- `check`: avisa id citado que não existe (em `relacionados` ou em `[[id]]`), seções fora de ordem e segredo dentro de referência.
+- App: tela "Problemas", com o relatório do `check` e o botão "Resolver tudo com a IA", que abre uma conversa nova para corrigir, mostra o diff e deixa desfazer. "Copiar pedido" serve para outra IA.
+- `abrir` e o botão "Abrir pasta da história": abrem a pasta no gerenciador de arquivos.
+- `instrucoes-da-historia.md`: regras só da sua história, copiadas para o fim do `CLAUDE.md` e do `AGENTS.md` pelo `atualizar-instrucoes`.
+
+### Mudado
+- Instruções para a IA (`CLAUDE.md` da história): ela pode editar o cânone quando o autor pede e consertar a forma sem pedir, com regras para não inventar. O `.claude/settings.json` deixa de negar a edição de bíblia, estado, alfabeto, fichas, referências e capítulos.
+- Modelos de ficha e de referência, prompts 00, 02, 04 e 05 e o exemplo `varmonte` no formato novo.
+
 ## [0.1.0] - 2026-10-06
 
 Primeira versão.

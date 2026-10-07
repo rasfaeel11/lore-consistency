@@ -74,7 +74,9 @@ button:hover {
   border-color: var(--destaque);
 }
 
-#botao-nova {
+#botao-nova,
+#abrir-pasta,
+#botao-problemas {
   width: 100%;
   margin-bottom: 12px;
 }
@@ -292,7 +294,8 @@ button.perigo {
 
 /* --- Sessão: informações de um lado, terminal do outro --- */
 
-#sessao:not([hidden]) {
+#sessao:not([hidden]),
+#problemas:not([hidden]) {
   display: grid;
   grid-template-columns: minmax(300px, 1fr) minmax(420px, 1.5fr);
   gap: 24px;
@@ -373,7 +376,8 @@ button.perigo {
 }
 
 @media (max-width: 1100px) {
-  #sessao:not([hidden]) {
+  #sessao:not([hidden]),
+  #problemas:not([hidden]) {
     grid-template-columns: 1fr;
   }
 

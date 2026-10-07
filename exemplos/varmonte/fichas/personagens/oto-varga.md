@@ -3,23 +3,29 @@ id: oto-varga
 tipo: personagem
 nome: Oto Varga
 aliases: [Mestre Oto, o mestre]
-status: vivo
-aparece_em: [cap-01]
+relacionados: [lia-brandt, guilda-dos-sineiros, sino-mudo]
 ---
-**Essencial (1 linha):** mestre fundidor da Fundição Alta, sessenta anos, fala pouco.
 
-**Fatos** (telegráfico, com capítulo de origem):
-- Aceitou Lia como aprendiz (cap-01).
-- Proíbe qualquer aprendiz de subir à torre do Sino Mudo (cap-01).
+# Oto Varga
 
-**Relações:**
-- Lia Brandt: aprendiz; enxerga nela o próprio ouvido.
+Mestre fundidor da Fundição Alta, sessenta anos, fala pouco.
 
-**Segredos (o leitor ainda não sabe):**
-- Foi ele quem fundiu o Sino Mudo, e sabe por que rachou.
+## Detalhes
 
-**Voz e maneirismos** (só personagens):
-- Responde com instruções de trabalho, nunca com explicações.
+- **Aprendiz:** Lia Brandt; enxerga nela o próprio ouvido.
+- **Voz:** responde com instruções de trabalho, nunca com explicações.
+- **Não pode:** nunca mente; quando não quer responder, cala.
 
-**Não pode** (restrições que a história precisa respeitar):
-- Nunca mente; quando não quer responder, cala.
+## Relações
+
+[[lia-brandt]] · [[guilda-dos-sineiros]] · [[sino-mudo]]
+
+## Segredo do autor
+
+> Nunca revelar diretamente no texto.
+
+Foi ele quem fundiu o Sino Mudo, e sabe por que rachou.
+
+## Na história
+
+- cap-01: aceita Lia como aprendiz e proíbe qualquer aprendiz de subir à torre do Sino Mudo.

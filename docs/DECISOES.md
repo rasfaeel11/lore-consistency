@@ -362,3 +362,31 @@ Especificação: `docs/prompts-dev/M5.md`, na versão ajustada ao código. O que
 - **README:** a instalação passou a ser pelo código (clonar e `npm run relink`), porque o pacote ainda não está no npm e `npm install -g lore-pack` daria 404. Ao publicar, trocar de volta (`docs/PUBLICAR.md`).
 - **Token na URL, dito como é:** a página e o WebSocket recebem o token na URL, então ele fica no histórico do navegador. É uma troca consciente: o navegador não deixa pôr cabeçalho em WebSocket nem na abertura de uma página, e manter o token na URL é o que permite recarregar a página e reanexar ao terminal. O que limita o risco: o token vale só para aquela execução do `lore-pack ui`, o servidor só escuta em 127.0.0.1 e não escreve log de pedidos, e a página não carrega nada de outro site (sem `Referer` para fora).
 
+## 2026-10-06: formato novo da ficha, IA mais livre e correção do check
+
+### Formato da ficha e da referência
+- **O que mudou:** a ficha ganhou `relacionados` (ids), links `[[id]]` no corpo e seções fixas (`## Detalhes`, `## Relações`, `## Segredo do autor`, `## Na história`). A referência ganhou `tipo: referencia` e perdeu a seção de segredos. O modelo veio da história do autor.
+- **Por que mexer no código, e não só no CLAUDE.md da história:** o `CLAUDE.md` é gerado de `instrucoes/instrucoes-ia.md`. Editado à mão, o `atualizar-instrucoes` devolveria o formato antigo.
+- **O que ficou de fora do texto gerado:** o que era só daquela história (nome das línguas, campo de nome antigo, números de seção da bíblia, a regra de tom). Princípio 7. Para isso existe o `instrucoes-da-historia.md`, que o `atualizar-instrucoes` copia para o fim do `CLAUDE.md`. O schema da ficha não é estrito, então campo próprio de uma história já passava.
+- **Compatibilidade:** `aliases` e `relacionados` continuam opcionais no schema, e `status`/`aparece_em` continuam aceitos. Tornar obrigatório quebraria toda pasta existente no primeiro `check`.
+- **Checagens novas são aviso, não erro:** id citado sem ficha, seções fora de ordem, segredo em referência. Erro trava o `pack`, e um link quebrado não justifica impedir a sessão. Link para referência também vale. Para saber se um id existe, o `check` olha o nome do arquivo, não o cabeçalho: assim uma ficha com erro no cabeçalho não faz todos os links para ela parecerem quebrados.
+- **Não verificado:** "alias genérico" não tem checagem; fica só na instrução.
+
+### A IA pode editar o cânone
+- **Antes:** "nunca edite" e o `.claude/settings.json` negando `Edit` em tudo. Com isso, nem a pedido do autor o Claude Code conseguia criar uma ficha.
+- **Agora:** três faixas no `CLAUDE.md` da história. Rascunho e fechamento, sempre. Conserto de forma (cabeçalho, pasta, ordem, link), sem pedir. Conteúdo do cânone, só com pedido; sem pedido, vira proposta no fechamento. O `settings.json` nega só as instruções e o `lore-pack.config.json` (que escolhe o comando do terminal).
+- **O que segura o erro:** a guarda já existia e continua igual. Mudança direta aparece com diff na sessão, e fechar a sessão exige "Manter" ou "Reverter". As regras contra invenção ficaram na seção "Ao editar um arquivo do cânone": ler antes, mudar só o pedido, todo fato vem do autor ou de um arquivo, rodar o `check`, dizer o que mudou.
+- **Custo:** o `CLAUDE.md` passou de 59 para cerca de 120 linhas. O teste que limitava em 65 agora limita em 125.
+- `buildStartPrompt` e o bloco de arquivos do pacote trocaram "Não edite nenhum outro arquivo" por "... sem eu pedir".
+
+### Correção do check numa conversa nova
+- **Onde:** tela "Problemas" do app (`#problemas`), aberta pelo botão da barra lateral quando há erro ou aviso. Não fica dentro de uma sessão porque erro trava o `pack`, e sem `pack` não há sessão para criar.
+- **Como:** o servidor roda o `check`, grava o pedido em `.lore-pack/correcao.md` e abre o terminal com um prompt de uma linha ("Leia o arquivo ... e siga"). O pedido vai em arquivo porque o argumento do comando não pode ter quebra de linha nem aspas (`batchArgsProblem`, no Windows).
+- **Rede de segurança:** antes de abrir, um snapshot com o nome `correcao` (não é id de sessão válido, então não colide). Quando o terminal fecha, a tela mostra o diff e "Desfazer tudo". Uma correção por vez: uma segunda trocaria o snapshot da primeira.
+- **Efeito colateral conhecido:** uma sessão aberta vai acusar, na guarda dela, o que a correção mudou. É o comportamento certo (mudou fora do fechamento); o autor clica em "Manter".
+- **Sem terminal:** "Copiar pedido" entrega o mesmo texto para colar em outra IA (princípio 9).
+- O painel do terminal é um só no HTML; a página o move para a tela aberta (sessão ou problemas).
+
+### Abrir a pasta
+- `lore-pack abrir` e `POST /api/pasta/abrir`. O navegador não manda caminho: abre sempre a pasta que o `ui` recebeu. No Windows chama o `explorer.exe` direto, sem `cmd`, porque o caminho de uma pasta pode ter `&`.
+

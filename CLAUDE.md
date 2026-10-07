@@ -41,8 +41,8 @@ Fora do escopo até a v1: chamar API de IA, contas de usuário, hospedagem onlin
 
 ```
 src/
-  core/        # funções puras: schemas da ficha e da sessão, validação, montagem do pacote, capítulos, sessões, guarda do cânone, mudanças do fechamento (changes.ts) e configuração do terminal (terminal-config.ts)
-  cli/         # comandos (lista única em commands.ts): init, check, pack, capitulo, sessao, apply, atualizar-instrucoes, ui. Lê e escreve arquivos. Também: guard.ts (snapshot da guarda), instrucoes.ts (CLAUDE.md/AGENTS.md da história) e open-browser.ts.
+  core/        # funções puras: schemas da ficha e da sessão, validação, montagem do pacote, capítulos, sessões, guarda do cânone, mudanças do fechamento (changes.ts), pedido de correção do check (fix.ts) e configuração do terminal (terminal-config.ts)
+  cli/         # comandos (lista única em commands.ts): init, check, pack, capitulo, sessao, apply, atualizar-instrucoes, abrir, ui. Lê e escreve arquivos. Também: guard.ts (snapshot da guarda), instrucoes.ts (CLAUDE.md/AGENTS.md da história) e open-browser.ts (abre o navegador e a pasta da história).
   server/      # servidor do app local (app.ts: node:http + ws, só 127.0.0.1) e terminal embutido (terminal.ts: terminais e WebSocket, node-pty opcional; command.ts: acha o comando no PATH). Usa o núcleo e as funções da CLI.
   index.ts     # ponto de entrada da CLI
 web/           # página do app: HTML, CSS e JS puro, servidos pelo server/
@@ -70,19 +70,21 @@ Markdown com cabeçalho YAML, em `fichas/<tipo>/<id>.md`. Modelo em `templates/m
 - `id`: obrigatório, minúsculas sem acento, números e hífen, igual ao nome do arquivo sem `.md`, único na pasta inteira.
 - `tipo`: obrigatório, um de `personagem`, `lugar`, `faccao`, `objeto`, `povo`, `conceito`. Pasta de cada um: `personagens`, `lugares`, `faccoes`, `objetos`, `povos`, `conceitos`.
 - `nome`: obrigatório, não vazio.
-- `aliases`: opcional, lista de textos (outros nomes, apelidos, títulos). Usado no M2 para achar a ficha numa cena.
-- `status`: opcional, texto.
-- `aparece_em`: opcional, lista de textos.
-- O corpo é livre (markdown).
+- `aliases`: lista de textos (outros nomes, apelidos, títulos). Usado no M2 para achar a ficha numa cena.
+- `relacionados`: lista de ids de outras fichas ou referências. O `check` avisa quando um id não existe; o mesmo vale para os links `[[id]]` do corpo.
+- O modelo e as instruções pedem `aliases` e `relacionados` sempre; o schema aceita os dois ausentes (viram `[]`), para as fichas antigas continuarem válidas.
+- Campos fora dessa lista passam (o schema não é estrito): cada história pode ter os seus. `status` e `aparece_em`, do formato antigo, continuam aceitos.
+- Corpo, na ordem: `# Nome`, resumo, `## Detalhes`, `## Relações`, `## Segredo do autor` (opcional), `## Na história`. O `check` avisa se as seções do modelo estiverem fora de ordem; ficha no formato antigo (títulos em negrito) passa sem aviso.
 
 ## Formato da referência
 
 Cânone organizado por tema (magia, combate, política...), em `referencias/<id>.md`. Markdown com cabeçalho YAML. Modelo em `templates/modelos/referencia-modelo.md`.
 
 - `id`: obrigatório, mesma regra das fichas. Único entre fichas e referências (o `--sem` vale para as duas).
+- `tipo`: opcional; se vier, só pode ser `referencia`.
 - `nome`: obrigatório, não vazio.
 - `palavras_chave`: opcional, lista de textos. O `check` avisa quando uma palavra-chave aparece em mais da metade das outras fichas e referências.
-- O corpo é livre e pode ser longo.
+- O corpo é livre e pode ser longo. Referência não tem seção de segredos (o `check` avisa se achar um título `## Segredo...`): eles ficam na bíblia e na seção `## Segredo do autor` das fichas.
 - O `pack` inclui a referência quando uma palavra-chave aparece no plano da cena (mesma busca do `findMentions`) ou com `--ref id1,id2`. `--sem` também tira referências. A última cena **não** puxa referências. Entram no bloco `{{referencias}}`, depois das fichas.
 
 ## Capítulos e sessões
@@ -94,7 +96,9 @@ Cânone organizado por tema (magia, combate, política...), em `referencias/<id>
 - `lore-pack apply <id>` mostra as operações numeradas com o diff e não grava nada; `--aplicar 1,3` ou `--aplicar todas` grava (tudo ou nada). Só altera `estado.md`, `alfabeto.md` e fichas. Recusa com a guarda acusando e, depois de gravar, tira um snapshot novo. No app, é a seção "Fechamento" da sessão. Aplicar não fecha a sessão.
 - `sessoes/<id>/aplicado.json`: o que já foi aplicado (sha256 do `fechamento.md`, data e números das operações), para rodar de novo não repetir nada.
 - `sessoes/<id>/alteracoes-diretas.md`: gerado pelo "Manter" da guarda (`sessao verificar --manter` ou o botão do app), com as alterações diretas em arquivos protegidos que o autor decidiu manter.
-- Guarda do cânone: ao criar a sessão, o lore-pack copia os arquivos protegidos (`biblia.md`, `estado.md`, `alfabeto.md`, `fichas/`, `referencias/`, `capitulos/`, mais `CLAUDE.md`, `AGENTS.md`, `.claude/settings.json` e `lore-pack.config.json`) para `.lore-pack/snapshots/<id>/`, pasta fora do git e ignorada pelo `check`. `sessao verificar` e o app comparam com o snapshot; `sessao fechar` recusa enquanto houver mudança não resolvida. É detecção depois do fato, não bloqueio.
+- Guarda do cânone: ao criar a sessão, o lore-pack copia os arquivos protegidos (`biblia.md`, `estado.md`, `alfabeto.md`, `fichas/`, `referencias/`, `capitulos/`, mais `CLAUDE.md`, `AGENTS.md`, `instrucoes-da-historia.md`, `.claude/settings.json` e `lore-pack.config.json`) para `.lore-pack/snapshots/<id>/`, pasta fora do git e ignorada pelo `check`. `sessao verificar` e o app comparam com o snapshot; `sessao fechar` recusa enquanto houver mudança não resolvida. É detecção depois do fato, não bloqueio.
+- Instruções da história: `instrucoes/instrucoes-ia.md` vira o `CLAUDE.md` e o `AGENTS.md`. Se a pasta tem `instrucoes-da-historia.md`, o `atualizar-instrucoes` copia o texto dele para o fim (seção "Regras desta história"). A IA pode editar o cânone com pedido do autor e consertar a forma sem pedido; o `.claude/settings.json` só nega as próprias instruções e o `lore-pack.config.json`.
+- Correção do check: na tela "Problemas" do app, "Resolver tudo com a IA" grava o pedido em `.lore-pack/correcao.md` (`buildFixRequest`), tira o snapshot `correcao` e abre um terminal com `FIX_START_PROMPT`. A tela mostra o diff do que mudou e tem "Desfazer tudo". Só uma correção roda por vez.
 - Cabeçalho do `sessao.md`: `id`, `capitulo` (precisa existir em `capitulos/`), `criada_em` (ISO), `status` (`aberta` | `fechada`), `fechada_em` (obrigatório se fechada). Corpo: `## Plano` e, depois de fechada, `## Resumo` opcional.
 
 ## Stack e convenções

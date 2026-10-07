@@ -3,17 +3,29 @@ id: fundicao-alta
 tipo: lugar
 nome: Fundição Alta
 aliases: [a Fundição]
-status: existe
-aparece_em: [cap-01]
+relacionados: [sino-mudo, guilda-dos-sineiros]
 ---
-**Essencial (1 linha):** oficina e torre no ponto mais alto de Varmonte, onde os sinos são fundidos e tocados.
 
-**Fatos** (telegráfico, com capítulo de origem):
-- Tem um pátio de moldes, o forno e a torre (cap-01).
-- A porta da torre fica trancada (cap-01).
+# Fundição Alta
 
-**Segredos (o leitor ainda não sabe):**
-- Há uma segunda escada para a torre, por dentro do forno velho.
+Oficina e torre no ponto mais alto de Varmonte, onde os sinos são fundidos e tocados.
 
-**Não pode** (restrições que a história precisa respeitar):
-- Da torre se vê o rio inteiro; do pátio, não.
+## Detalhes
+
+- **Partes:** um pátio de moldes, o forno e a torre.
+- **Torre:** a porta fica trancada.
+- **Não pode:** da torre se vê o rio inteiro; do pátio, não.
+
+## Relações
+
+[[sino-mudo]] · [[guilda-dos-sineiros]]
+
+## Segredo do autor
+
+> Nunca revelar diretamente no texto.
+
+Há uma segunda escada para a torre, por dentro do forno velho.
+
+## Na história
+
+- cap-01: Lia chega e conhece o pátio, o forno e a porta trancada da torre.

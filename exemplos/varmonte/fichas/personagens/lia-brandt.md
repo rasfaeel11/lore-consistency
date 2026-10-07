@@ -3,25 +3,31 @@ id: lia-brandt
 tipo: personagem
 nome: Lia Brandt
 aliases: [Lia]
-status: viva
-aparece_em: [cap-01, cap-02]
+relacionados: [oto-varga, irena-sol, fundicao-alta]
 ---
-**Essencial (1 linha):** aprendiz de sineira, dezessete anos, teimosa com perguntas.
 
-**Fatos** (telegráfico, com capítulo de origem):
-- Chegou à Fundição Alta no fim do inverno (cap-01).
-- Tem ouvido absoluto: reconhece qualquer sino da cidade (cap-01).
-- Tocou o toque de cheia no sino da ponte (cap-02).
-- Ouviu um estalo na torre durante a cheia (cap-02).
+# Lia Brandt
 
-**Relações:**
-- Oto Varga: mestre dela; respeita e desconfia.
+Aprendiz de sineira, dezessete anos, teimosa com perguntas.
 
-**Segredos (o leitor ainda não sabe):**
-- O pai dela morreu na cheia do ano em que o Sino Mudo rachou.
+## Detalhes
 
-**Voz e maneirismos** (só personagens):
-- Frases curtas. Pergunta antes de obedecer.
+- **Ouvido:** absoluto; reconhece qualquer sino da cidade.
+- **Mestre:** Oto Varga; respeita e desconfia.
+- **Voz:** frases curtas. Pergunta antes de obedecer.
+- **Não pode:** não sabe nadar.
 
-**Não pode** (restrições que a história precisa respeitar):
-- Não sabe nadar.
+## Relações
+
+[[oto-varga]] · [[irena-sol]] · [[fundicao-alta]]
+
+## Segredo do autor
+
+> Nunca revelar diretamente no texto.
+
+O pai dela morreu na cheia do ano em que o Sino Mudo rachou.
+
+## Na história
+
+- cap-01: chega à Fundição Alta no fim do inverno.
+- cap-02: toca o toque de cheia no sino da ponte e ouve um estalo na torre.

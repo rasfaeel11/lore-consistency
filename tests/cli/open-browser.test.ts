@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { browserCommand } from "../../src/cli/open-browser.js";
+import { browserCommand, folderCommand } from "../../src/cli/open-browser.js";
 
 const URL = "http://127.0.0.1:4777/?token=abc_DEF-123";
 
@@ -20,5 +20,19 @@ describe("browserCommand", () => {
   it("recusa URL fora do formato do app (nada além do que o próprio ui monta)", () => {
     expect(browserCommand("win32", "http://127.0.0.1:4777/?token=a&calc")).toBeUndefined();
     expect(browserCommand("linux", "https://exemplo.com")).toBeUndefined();
+  });
+});
+
+describe("folderCommand", () => {
+  it("Windows usa o explorer direto, sem cmd: o caminho pode ter & e espaço", () => {
+    expect(folderCommand("win32", "C:\\Histórias\\Sal & Cinza")).toEqual({
+      command: "explorer.exe",
+      args: ["C:\\Histórias\\Sal & Cinza"],
+    });
+  });
+
+  it("macOS usa open; Linux e outros usam xdg-open", () => {
+    expect(folderCommand("darwin", "/h/minha historia")).toEqual({ command: "open", args: ["/h/minha historia"] });
+    expect(folderCommand("linux", "/h/minha historia")).toEqual({ command: "xdg-open", args: ["/h/minha historia"] });
   });
 });

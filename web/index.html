@@ -16,7 +16,10 @@
         <h1 id="nome-historia">…</h1>
       </header>
       <button id="botao-nova" type="button">+ Nova sessão</button>
+      <button id="abrir-pasta" type="button">Abrir pasta da história</button>
+      <p id="pasta-status" class="dica" role="status"></p>
       <p id="aviso-erros" class="aviso" hidden></p>
+      <button id="botao-problemas" type="button" hidden>Ver e resolver problemas</button>
       <nav id="capitulos" aria-label="Capítulos e sessões"></nav>
     </aside>
 
@@ -58,6 +61,39 @@
           <button type="submit">Criar sessão</button>
         </form>
         <pre id="erro-nova" class="erro" hidden></pre>
+      </section>
+
+      <section id="problemas" hidden>
+        <div class="sessao-info">
+          <p class="marca">check</p>
+          <h2>Problemas da pasta</h2>
+          <p id="problemas-resumo"></p>
+          <pre id="problemas-relatorio" class="resumo"></pre>
+
+          <h3>Resolver com a IA</h3>
+          <p class="dica">
+            Abre uma conversa nova com a IA, ao lado, pedindo para corrigir tudo o que der sem inventar nada. O que
+            depende de uma decisão sua, ela lista em vez de resolver. Antes de começar, o lore-pack guarda uma cópia
+            dos arquivos: depois você vê aqui o que mudou e pode desfazer.
+          </p>
+          <div class="acoes">
+            <button id="resolver" type="button">Resolver tudo com a IA</button>
+            <button id="copiar-pedido" type="button">Copiar pedido</button>
+            <button id="problemas-reler" type="button">Verificar de novo</button>
+          </div>
+          <p id="problemas-status" role="status"></p>
+
+          <div id="problemas-mudancas" hidden>
+            <h3>O que a correção mudou</h3>
+            <p id="problemas-titulo" class="dica"></p>
+            <div id="problemas-lista"></div>
+            <div class="acoes">
+              <button id="problemas-reverter" type="button">Desfazer tudo</button>
+              <button id="problemas-confirmar" type="button" class="perigo" hidden></button>
+              <button id="problemas-cancelar" type="button" hidden>Cancelar</button>
+            </div>
+          </div>
+        </div>
       </section>
 
       <section id="sessao" hidden>

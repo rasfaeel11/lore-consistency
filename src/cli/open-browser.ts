@@ -18,16 +18,33 @@ export function browserCommand(
   return { command: "xdg-open", args: [url] };
 }
 
+// Qual programa abre uma pasta no gerenciador de arquivos. No Windows é o explorer direto,
+// sem passar pelo cmd: o caminho da pasta pode ter "&" e outros caracteres que o cmd interpreta.
+export function folderCommand(platform: NodeJS.Platform, folder: string): { command: string; args: string[] } {
+  if (platform === "win32") return { command: "explorer.exe", args: [folder] };
+  if (platform === "darwin") return { command: "open", args: [folder] };
+  return { command: "xdg-open", args: [folder] };
+}
+
 // Tenta abrir o navegador sem esperar nem falhar: se não abrir, a URL já foi impressa.
 export function openBrowser(url: string): void {
   const found = browserCommand(process.platform, url);
   if (!found) return;
+  launch(found);
+}
+
+// Abre a pasta no gerenciador de arquivos. Quem chama mostra o caminho, caso não abra.
+export function openFolder(folder: string): void {
+  launch(folderCommand(process.platform, folder));
+}
+
+function launch(found: { command: string; args: string[] }): void {
   try {
     const child = spawn(found.command, found.args, { stdio: "ignore", detached: true, windowsHide: true });
     // Programa inexistente (ex.: Linux sem xdg-open) vira evento de erro; ignoramos.
     child.on("error", () => {});
     child.unref();
   } catch {
-    // Idem: o usuário copia a URL impressa.
+    // Idem: o usuário copia o endereço (ou o caminho) impresso.
   }
 }

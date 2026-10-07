@@ -1,13 +1,24 @@
 ---
 id: sinos
+tipo: referencia
 nome: Sinos e toques
 palavras_chave: [toque, badalo, liga]
 ---
-**Regras:**
-- Cada sino tem um toque próprio: número de batidas e intervalo.
-- O toque de cheia são batidas seguidas, sem pausa, até o rio baixar.
-- A liga é bronze: quatro partes de cobre para uma de estanho. Estanho de mais deixa o sino quebradiço.
-- Um sino rachado não pode ser consertado; só refundido.
 
-**Segredos (o leitor ainda não sabe):**
-- Um sino pode ser rachado sem marca visível, esfriando a boca com água logo depois do toque.
+# Sinos e toques
+
+## 1. Os toques
+
+### 1.1 Um toque por sino
+Cada sino tem um toque próprio: número de batidas e intervalo.
+
+### 1.2 O toque de cheia
+Batidas seguidas, sem pausa, até o rio baixar.
+
+## 2. O bronze
+
+### 2.1 A liga
+Quatro partes de cobre para uma de estanho. Estanho de mais deixa o sino quebradiço.
+
+### 2.2 Sino rachado
+Não pode ser consertado; só refundido. Como um sino racha sem marca: ver o segredo na ficha `sino-mudo`.

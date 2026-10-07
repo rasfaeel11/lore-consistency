@@ -1,6 +1,6 @@
 import type { z } from "zod";
 import { CHAPTER_ID, chapterFileName, listChapters } from "./chapters.js";
-import { FOLDER_BY_TIPO, fichaSchema, type Ficha } from "./ficha.js";
+import { FICHA_SECTIONS, FOLDER_BY_TIPO, fichaSchema, type Ficha } from "./ficha.js";
 import { splitFrontmatter } from "./frontmatter.js";
 import { findTerms } from "./mentions.js";
 import { normalize } from "./normalize.js";
@@ -49,19 +49,19 @@ export function validateStory(files: StoryFile[]): Problem[] {
   }
 
   // Fichas que passaram na validação individual seguem para as checagens entre fichas.
-  const valid: { path: string; ficha: Ficha }[] = [];
+  const valid: { path: string; content: string; ficha: Ficha }[] = [];
 
   for (const file of files.filter((f) => isFichaPath(f.path))) {
     const fichaProblems = validateFicha(file);
     problems.push(...fichaProblems.problems);
-    if (fichaProblems.ficha) valid.push({ path: file.path, ficha: fichaProblems.ficha });
+    if (fichaProblems.ficha) valid.push({ path: file.path, content: file.content, ficha: fichaProblems.ficha });
   }
 
-  const validRefs: { path: string; referencia: Referencia }[] = [];
+  const validRefs: { path: string; content: string; referencia: Referencia }[] = [];
   for (const file of files.filter((f) => isReferenciaPath(f.path))) {
     const refProblems = validateReferencia(file);
     problems.push(...refProblems.problems);
-    if (refProblems.referencia) validRefs.push({ path: file.path, referencia: refProblems.referencia });
+    if (refProblems.referencia) validRefs.push({ path: file.path, content: file.content, referencia: refProblems.referencia });
   }
 
   // O id é único entre fichas e referências, porque o --sem vale para as duas.
@@ -74,6 +74,9 @@ export function validateStory(files: StoryFile[]): Problem[] {
   problems.push(...findRepeatedNames(valid));
   problems.push(...findWrongFolders(valid));
   problems.push(...findGenericKeywords(validRefs, files));
+  problems.push(...findBrokenLinks(valid, files));
+  problems.push(...findSectionsOutOfOrder(valid));
+  problems.push(...findSecretsInReferences(validRefs));
 
   problems.push(...validateChapterNames(files));
   const chapterIds = listChapters(files).map((chapter) => chapter.id);
@@ -252,6 +255,82 @@ function findGenericKeywords(validRefs: { path: string; referencia: Referencia }
         severity: "aviso",
       });
     }
+  }
+  return problems;
+}
+
+// Todo id citado precisa existir: os de "relacionados" e os [[id]] do corpo.
+// Vale ficha ou referência. Usa o nome do arquivo (que é o id), para uma ficha com erro
+// no cabeçalho não fazer todos os links para ela parecerem quebrados.
+function findBrokenLinks(valid: { path: string; content: string; ficha: Ficha }[], files: StoryFile[]): Problem[] {
+  const known = new Set(
+    files.filter((f) => isFichaPath(f.path) || isReferenciaPath(f.path)).map((f) => fileNameWithoutExtension(f.path)),
+  );
+  const fix = "Corrija o id, crie a ficha que falta ou tire a citação.";
+  const problems: Problem[] = [];
+  for (const { path, content, ficha } of valid) {
+    for (const id of new Set(ficha.relacionados)) {
+      if (known.has(id)) continue;
+      problems.push({
+        path,
+        field: "relacionados",
+        message: `"${id}" está em relacionados, mas não existe ficha nem referência com esse id. ${fix}`,
+        severity: "aviso",
+      });
+    }
+    const split = splitFrontmatter(content);
+    const body = split.ok ? split.body : "";
+    const linked = new Set([...body.matchAll(/\[\[([^\[\]]+)\]\]/g)].map((match) => (match[1] ?? "").trim()));
+    for (const id of linked) {
+      if (known.has(id)) continue;
+      problems.push({
+        path,
+        field: null,
+        message: `O link [[${id}]] aponta para um id que não existe em fichas/ nem em referencias/. ${fix}`,
+        severity: "aviso",
+      });
+    }
+  }
+  return problems;
+}
+
+// Títulos "## ..." do corpo, já normalizados (sem acento, minúsculas).
+function hashHeadings(content: string): string[] {
+  const split = splitFrontmatter(content);
+  const body = split.ok ? split.body : content;
+  return [...body.matchAll(/^##\s+(.+)$/gm)].map((match) => normalizeName(match[1] ?? ""));
+}
+
+// Só olha as seções do modelo que a ficha tem: ficha no formato antigo (títulos em negrito) passa.
+function findSectionsOutOfOrder(valid: { path: string; content: string }[]): Problem[] {
+  const order = FICHA_SECTIONS.map(normalizeName);
+  const problems: Problem[] = [];
+  for (const { path, content } of valid) {
+    const found = hashHeadings(content)
+      .map((title) => order.indexOf(title))
+      .filter((index) => index >= 0);
+    if (found.every((index, i) => i === 0 || index > (found[i - 1] ?? -1))) continue;
+    problems.push({
+      path,
+      field: null,
+      message: `As seções estão fora de ordem ou repetidas. A ordem é: ${FICHA_SECTIONS.map((title) => `## ${title}`).join(", ")}. Mova as seções sem mudar o texto delas.`,
+      severity: "aviso",
+    });
+  }
+  return problems;
+}
+
+// Referência entra no pacote por palavra-chave, sem ninguém escolher: segredo ali vaza fácil.
+function findSecretsInReferences(validRefs: { path: string; content: string }[]): Problem[] {
+  const problems: Problem[] = [];
+  for (const { path, content } of validRefs) {
+    if (!hashHeadings(content).some((title) => title.startsWith("segredo"))) continue;
+    problems.push({
+      path,
+      field: null,
+      message: `Referência não tem seção de segredos. Mova o segredo para a bíblia ou para a seção "## Segredo do autor" de uma ficha, e deixe aqui só "ver a bíblia".`,
+      severity: "aviso",
+    });
   }
   return problems;
 }

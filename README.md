@@ -15,11 +15,12 @@ O que funciona é disciplina: uma bíblia curta, um resumo do estado da históri
 ## O que ele faz
 
 - **`init`** cria a pasta da história com os modelos: bíblia, estado, alfabeto de nomes, fichas, referências e os prompts de cada etapa da sessão.
-- **`check`** valida as fichas: campos obrigatórios, ids repetidos, nome usado em duas fichas, ficha na pasta errada.
+- **`check`** valida as fichas: campos obrigatórios, ids repetidos, nome usado em duas fichas, ficha na pasta errada, link para ficha que não existe, seções fora de ordem.
 - **`pack`** monta o pacote da sessão: bíblia + estado + só as fichas citadas no plano da cena e na última cena + as referências do tema + a última cena, com estimativa de tokens.
 - **`capitulo`** e **`sessao`** organizam capítulos e sessões de escrita, cada sessão na sua pasta.
 - **`apply`** lê as mudanças que a IA propôs no fim da sessão, mostra o diff de cada uma e grava só as que você escolher.
-- **`ui`** abre um app no navegador, só no seu computador, com tudo isso em botões e um terminal embutido para a IA.
+- **`ui`** abre um app no navegador, só no seu computador, com tudo isso em botões e um terminal embutido para a IA. Quando o `check` acha problemas, o botão "Resolver tudo com a IA" abre uma conversa nova que corrige o que der sem inventar nada; você vê o diff e pode desfazer.
+- **`abrir`** abre a pasta da história no gerenciador de arquivos (no app, é o botão "Abrir pasta da história").
 - **Guarda do cânone:** quando a sessão começa, o lore-pack guarda uma cópia dos arquivos da história e depois acusa qualquer mudança feita por fora da sua aprovação.
 
 ## Instalação
@@ -59,8 +60,7 @@ id: ana-ferreira
 tipo: personagem
 nome: Ana Ferreira
 aliases: [Aninha]
-status: viva
-aparece_em: []
+relacionados: []
 ---
 ```
 
@@ -160,7 +160,7 @@ O app roda um servidor no seu computador e pode abrir um programa de terminal. O
 - O comando do terminal vem só de `lore-pack.config.json`. O navegador diz apenas "abrir terminal para a sessão X".
 - No `apply`, o navegador diz só qual sessão e quais números da lista. As operações são lidas, no servidor, do `fechamento.md`, e o caminho de cada arquivo é calculado: nunca vem do JSON da IA.
 
-**A guarda do cânone é detecção depois do fato, não bloqueio.** Se a IA reescrever uma ficha, você descobre e pode reverter, mas a escrita já aconteceu. O `.claude/settings.json` que o `init` cria proíbe o Claude Code de editar os arquivos protegidos, mas vale só para o Claude Code e não pega um script que a IA rode por conta própria. Gemini e ChatGPT ignoram esse arquivo. Use git na pasta da história.
+**A guarda do cânone é detecção depois do fato, não bloqueio.** Se a IA reescrever uma ficha, você descobre e pode reverter, mas a escrita já aconteceu. A IA pode editar o cânone quando você pede (o `CLAUDE.md` da história diz como), e é a guarda que mostra o que mudou. O `.claude/settings.json` que o `init` cria só proíbe o Claude Code de editar as próprias instruções e o `lore-pack.config.json`; vale só para o Claude Code e não pega um script que a IA rode por conta própria. Gemini e ChatGPT ignoram esse arquivo. Use git na pasta da história.
 
 ## Limitações
 
