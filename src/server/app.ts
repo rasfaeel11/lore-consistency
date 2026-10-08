@@ -12,6 +12,7 @@ import { FIX_FILE, FIX_ID, FIX_START_PROMPT, buildFixRequest } from "../core/fix
 import { buildStartPrompt, isSessionId, listSessions, readSession } from "../core/session.js";
 import { readReferencias, validateStory } from "../core/validate.js";
 import { applyClosing, readClosing } from "../cli/apply.js";
+import { createChapter } from "../cli/capitulo.js";
 import { formatReport } from "../cli/check.js";
 import { openFolder } from "../cli/open-browser.js";
 import { readPackOptions } from "../cli/pack.js";
@@ -171,6 +172,7 @@ async function handle(app: App, server: Server, req: IncomingMessage, res: Serve
 
   if (method === "GET" && path === "/api/historia") return sendJson(res, 200, storySummary(root));
   if (method === "POST" && path === "/api/sessoes") return postSession(root, req, res);
+  if (method === "POST" && path === "/api/capitulos") return postChapter(root, req, res);
 
   // Abre a pasta da história no gerenciador de arquivos. O navegador não manda caminho nenhum:
   // a pasta é sempre a que o "lore-pack ui" recebeu.
@@ -377,6 +379,17 @@ async function postSession(root: string, req: IncomingMessage, res: ServerRespon
   const created = createSession({ ...options.options, root, capitulo, plan: plano });
   if (!created.ok) return sendJson(res, 400, { erro: created.error });
   sendJson(res, 201, { id: created.id, resumo: created.summary });
+}
+
+// O "capitulo novo" da CLI. O navegador só manda o título: o nome do arquivo é sempre o próximo cap-NN.
+async function postChapter(root: string, req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const body = await readJson(req, res);
+  if (!body) return;
+  const titulo = typeof body.titulo === "string" ? body.titulo : "";
+  if (titulo.trim() === "") return sendJson(res, 400, { erro: "Escreva o título do capítulo." });
+
+  const created = createChapter(root, titulo);
+  sendJson(res, 201, { id: created.id, titulo: created.title });
 }
 
 // DELETE não é um método que outro site consiga mandar sem permissão de CORS, e ainda exige o token.

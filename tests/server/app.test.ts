@@ -172,6 +172,32 @@ describe("servidor do app", () => {
     });
   });
 
+  describe("POST /api/capitulos", () => {
+    it("cria o próximo capítulo com o título e ele aparece na lista", async () => {
+      const response = await postJson("/api/capitulos", { titulo: "  A tempestade  " });
+
+      expect(response.status).toBe(201);
+      expect(await response.json()).toEqual({ id: "cap-03", titulo: "A tempestade" });
+      expect(readFileSync(join(story, "capitulos", "cap-03.md"), "utf8")).toBe("# A tempestade\n");
+      const historia = await (await fetch(`${base}/api/historia`)).json();
+      expect(historia.capitulos.at(-1)).toEqual({ id: "cap-03", titulo: "A tempestade", sessoes: [] });
+    });
+
+    it("título com quebra de linha vira uma linha só (não cria outro cabeçalho)", async () => {
+      await postJson("/api/capitulos", { titulo: "A ponte\n# Outro" });
+
+      expect(readFileSync(join(story, "capitulos", "cap-03.md"), "utf8")).toBe("# A ponte # Outro\n");
+    });
+
+    it("sem título dá 400 e não cria nada", async () => {
+      const response = await postJson("/api/capitulos", { titulo: "   " });
+
+      expect(response.status).toBe(400);
+      expect((await response.json()).erro).toContain("título");
+      expect(existsSync(join(story, "capitulos", "cap-03.md"))).toBe(false);
+    });
+  });
+
   describe("POST /api/pasta/abrir", () => {
     it("abre a pasta da história, sem aceitar caminho do navegador", async () => {
       const response = await postJson("/api/pasta/abrir", { pasta: tempDir });

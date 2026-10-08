@@ -46,7 +46,7 @@ function desenharBarra() {
   if (historia.capitulos.length === 0) {
     const p = document.createElement("p");
     p.className = "vazio";
-    p.textContent = 'Nenhum capítulo ainda. Crie o primeiro no terminal: lore-pack capitulo novo "<título>"';
+    p.textContent = 'Nenhum capítulo ainda. Crie o primeiro em "+ Novo capítulo".';
     nav.append(p);
     return;
   }
@@ -594,6 +594,42 @@ async function copiar(texto, mensagem, onde = "copiado") {
 }
 
 $("botao-nova").addEventListener("click", () => (location.hash = "#nova"));
+
+// --- Novo capítulo: um campo só, na própria barra ---
+
+function mostrarFormCapitulo(sim) {
+  $("form-capitulo").hidden = !sim;
+  $("botao-capitulo").hidden = sim;
+  if (sim) $("form-capitulo").elements.titulo.focus();
+}
+
+$("botao-capitulo").addEventListener("click", () => {
+  $("capitulo-status").textContent = "";
+  mostrarFormCapitulo(true);
+});
+$("cancelar-capitulo").addEventListener("click", () => mostrarFormCapitulo(false));
+$("form-capitulo").addEventListener("submit", async (evento) => {
+  evento.preventDefault();
+  const form = evento.target;
+  try {
+    const criado = await api("/api/capitulos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ titulo: form.elements.titulo.value }),
+    });
+    form.reset();
+    mostrarFormCapitulo(false);
+    $("capitulo-status").textContent = `Criado: capitulos/${criado.id}.md`;
+    await carregarHistoria();
+    // Na tela de nova sessão, o capítulo novo já entra na lista, escolhido.
+    if (rotaAtual().tipo === "nova") {
+      mostrarNova();
+      document.querySelector('#form-nova [name="capitulo"]').value = criado.id;
+    }
+  } catch (erro) {
+    $("capitulo-status").textContent = erro.message;
+  }
+});
 
 $("copiar-comando").addEventListener("click", () => copiar($("sessao-comando").textContent, "Comando copiado."));
 

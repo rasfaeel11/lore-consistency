@@ -16,6 +16,18 @@
         <h1 id="nome-historia">…</h1>
       </header>
       <button id="botao-nova" type="button">+ Nova sessão</button>
+      <button id="botao-capitulo" type="button">+ Novo capítulo</button>
+      <form id="form-capitulo" hidden>
+        <label>
+          Título do capítulo
+          <input name="titulo" type="text" required placeholder="A tempestade" />
+        </label>
+        <div class="acoes">
+          <button type="submit">Criar capítulo</button>
+          <button id="cancelar-capitulo" type="button">Cancelar</button>
+        </div>
+      </form>
+      <p id="capitulo-status" class="dica" role="status"></p>
       <button id="abrir-pasta" type="button">Abrir pasta da história</button>
       <p id="pasta-status" class="dica" role="status"></p>
       <p id="aviso-erros" class="aviso" hidden></p>

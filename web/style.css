@@ -74,11 +74,21 @@ button:hover {
   border-color: var(--destaque);
 }
 
-#botao-nova,
-#abrir-pasta,
-#botao-problemas {
+#barra > button {
   width: 100%;
+  margin-bottom: 8px;
+}
+
+#form-capitulo {
   margin-bottom: 12px;
+}
+
+#form-capitulo .acoes {
+  margin-top: 0;
+}
+
+#barra > p:empty {
+  display: none;
 }
 
 .capitulo h2 {

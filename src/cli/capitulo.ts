@@ -32,11 +32,19 @@ export function capitulo(args: string[]): CliResult {
   const story = findStoryRoot(folder);
   if (!story.ok) return fail(story.error);
 
-  const ids = listChapters(readStoryFiles(story.root)).map((chapter) => chapter.id);
-  const id = nextChapterId(ids);
-  mkdirSync(join(story.root, "capitulos"), { recursive: true });
-  // "wx": falha se o arquivo já existir, em vez de sobrescrever.
-  writeFileSync(join(story.root, "capitulos", `${id}.md`), `# ${title.trim()}\n`, { flag: "wx" });
+  const created = createChapter(story.root, title);
+  return ok(`Capítulo criado: capitulos/${created.id}.md ("${created.title}")\n`);
+}
 
-  return ok(`Capítulo criado: capitulos/${id}.md ("${title.trim()}")\n`);
+// Cria capitulos/<próximo cap-NN>.md só com o título. Usado pelo "capitulo novo" e pelo app.
+// Quem chama já conferiu que a pasta é uma história e que o título não está vazio.
+export function createChapter(root: string, title: string): { id: string; title: string } {
+  // O título vira a linha "# título": uma quebra de linha no meio criaria outro cabeçalho.
+  const line = title.replace(/\s+/g, " ").trim();
+  const ids = listChapters(readStoryFiles(root)).map((chapter) => chapter.id);
+  const id = nextChapterId(ids);
+  mkdirSync(join(root, "capitulos"), { recursive: true });
+  // "wx": falha se o arquivo já existir, em vez de sobrescrever.
+  writeFileSync(join(root, "capitulos", `${id}.md`), `# ${line}\n`, { flag: "wx" });
+  return { id, title: line };
 }
