@@ -413,6 +413,88 @@ describe("servidor do app", () => {
     });
   });
 
+  describe("opções da CLI que faltavam no app", () => {
+    it("POST /api/sessoes aceita o limite de tokens e o resumo avisa quando passa", async () => {
+      const response = await postJson("/api/sessoes", { capitulo: "cap-02", plano: "Ana Ferreira volta ao porto.", limite: "10" });
+
+      expect(response.status).toBe(201);
+      expect((await response.json()).resumo).toContain("passa do limite de 10");
+    });
+
+    it("limite que não é número dá 400 e não cria a sessão", async () => {
+      const before = readdirSync(join(story, "sessoes"));
+
+      const response = await postJson("/api/sessoes", { capitulo: "cap-02", plano: "Ana volta.", limite: "muito" });
+
+      expect(response.status).toBe(400);
+      expect((await response.json()).erro).toContain("número inteiro");
+      expect(readdirSync(join(story, "sessoes"))).toEqual(before);
+    });
+
+    it("POST /api/pacote monta o pacote sem criar sessão e sem gravar nada na história", async () => {
+      const before = readdirSync(join(story, "sessoes"));
+
+      const response = await postJson("/api/pacote", { plano: "Ana Ferreira volta ao porto." });
+      const body = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(body.texto).toContain("Uma cidade portuária movida a sal.");
+      expect(body.texto).toContain("id: ana-ferreira");
+      // Pacote avulso não tem o bloco que manda escrever nos arquivos de uma sessão.
+      expect(body.texto).not.toContain("ARQUIVOS DESTA SESSÃO");
+      expect(body.resumo).toContain("ana-ferreira");
+      expect(readdirSync(join(story, "sessoes"))).toEqual(before);
+      expect(existsSync(join(story, "pacote.md"))).toBe(false);
+    });
+
+    it("POST /api/pacote sem plano dá 400", async () => {
+      const response = await postJson("/api/pacote", { plano: " " });
+
+      expect(response.status).toBe(400);
+      expect((await response.json()).erro).toContain("plano");
+    });
+  });
+
+  describe("instruções para a IA (o atualizar-instrucoes)", () => {
+    const actions = (body: { arquivos: { arquivo: string; acao: string }[] }) =>
+      Object.fromEntries(body.arquivos.map((a) => [a.arquivo, a.acao]));
+
+    it("GET mostra o que seria feito, sem gravar nada", async () => {
+      const body = await (await fetch(`${base}/api/instrucoes`)).json();
+
+      expect(actions(body)).toEqual({ "CLAUDE.md": "criado", "AGENTS.md": "criado", ".claude/settings.json": "criado" });
+      expect(existsSync(join(story, "CLAUDE.md"))).toBe(false);
+    });
+
+    it("POST grava os três arquivos, e depois disso está tudo igual", async () => {
+      const response = await postJson("/api/instrucoes", {});
+      const body = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(body.gravados).toEqual(["CLAUDE.md", "AGENTS.md", ".claude/settings.json"]);
+      expect(readFileSync(join(story, "CLAUDE.md"), "utf8")).toContain("Instruções para a IA");
+      expect(actions(body)).toEqual({ "CLAUDE.md": "igual", "AGENTS.md": "igual", ".claude/settings.json": "igual" });
+    });
+
+    it("arquivo editado pelo autor: 409 com o diff, e só grava com sobrescrever", async () => {
+      await postJson("/api/instrucoes", {});
+      writeFileSync(join(story, "CLAUDE.md"), "Minhas regras.\n");
+
+      const refused = await postJson("/api/instrucoes", {});
+      const view = await (await fetch(`${base}/api/instrucoes`)).json();
+
+      expect(refused.status).toBe(409);
+      expect(readFileSync(join(story, "CLAUDE.md"), "utf8")).toBe("Minhas regras.\n");
+      expect(actions(view)["CLAUDE.md"]).toBe("editado");
+      expect(view.arquivos[0].diff).toContain("- Minhas regras.");
+
+      const forced = await postJson("/api/instrucoes", { sobrescrever: true });
+
+      expect(forced.status).toBe(200);
+      expect(readFileSync(join(story, "CLAUDE.md"), "utf8")).toContain("Instruções para a IA");
+    });
+  });
+
   describe("guarda do cânone", () => {
     const ESTADO = () => join(story, "estado.md");
 

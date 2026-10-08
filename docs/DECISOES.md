@@ -406,3 +406,9 @@ Pedido do autor: criar capítulo, abrir a IA sem sessão e discutir os rumos da 
 - **Sem prompt:** `fillArgs` com prompt vazio tira os argumentos que têm `{{prompt}}`, em vez de passar um argumento vazio para o programa. Limite conhecido: uma configuração como `["-p", "{{prompt}}"]` deixa o `-p` sozinho na conversa livre.
 - **O assunto vem do navegador** e vira texto do pedido, como o plano de uma sessão. Comando e argumentos continuam vindo só do `lore-pack.config.json`.
 - O prompt `08-discutir-rumos` entrou em `templates/prompts-de-sessao/`, para quem cola à mão.
+
+### O resto da CLI no app
+- **Limite de tokens e resumo ao fechar:** viraram campos. O limite fica em "Opções do pacote"; o resumo aparece junto do botão de confirmar o fechamento.
+- **"Só montar o pacote"** (`POST /api/pacote`) é o `pack` da CLI. O arquivo vai para `.lore-pack/pacote.md`, e não para a raiz da história como na CLI: a página só precisa do texto para copiar, e assim nada do autor é tocado.
+- **"Instruções da IA"** (`#instrucoes`) é o `atualizar-instrucoes`. `planInstructions` e `applyInstructions` saíram de dentro do comando. A tela mostra o que seria feito antes de gravar; com arquivo editado pelo autor, mostra o diff e o único botão que grava é "Sobrescrever o que eu editei e atualizar" (princípio 4).
+- **Fica só na CLI:** `init` (o app abre numa pasta que já é história) e o próprio `ui`.

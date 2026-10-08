@@ -7,7 +7,7 @@ import type { Duplex } from "node:stream";
 import { WebSocketServer } from "ws";
 import { basename, join } from "node:path";
 import { buildFixPrompt, extractChanges } from "../core/changes.js";
-import { listChapters } from "../core/chapters.js";
+import { CHAPTER_ID, listChapters } from "../core/chapters.js";
 import { DISCUSSION_FILE, DISCUSSION_START_PROMPT, TALK_ID, buildDiscussionPack, buildDiscussionRequest, discussionFiles } from "../core/discussion.js";
 import { FIX_FILE, FIX_ID, FIX_START_PROMPT, buildFixRequest } from "../core/fix.js";
 import { buildStartPrompt, isSessionId, listSessions, readSession } from "../core/session.js";
@@ -16,8 +16,9 @@ import { readReferencias, validateStory } from "../core/validate.js";
 import { applyClosing, readClosing } from "../cli/apply.js";
 import { createChapter } from "../cli/capitulo.js";
 import { formatReport } from "../cli/check.js";
+import { applyInstructions, planInstructions } from "../cli/instrucoes.js";
 import { openFolder } from "../cli/open-browser.js";
-import { readPackOptions } from "../cli/pack.js";
+import { readPackOptions, writePack, type PackOptions } from "../cli/pack.js";
 import { WEB_DIR } from "../cli/paths.js";
 import { checkGuard, ensureLorePackDir, hasSnapshot, keepChanges, revertChanges, takeSnapshot } from "../cli/guard.js";
 import { closeSessionFolder, createSession, deleteSession } from "../cli/sessao.js";
@@ -175,6 +176,9 @@ async function handle(app: App, server: Server, req: IncomingMessage, res: Serve
   if (method === "GET" && path === "/api/historia") return sendJson(res, 200, storySummary(root));
   if (method === "POST" && path === "/api/sessoes") return postSession(root, req, res);
   if (method === "POST" && path === "/api/capitulos") return postChapter(root, req, res);
+  if (method === "POST" && path === "/api/pacote") return postPack(root, req, res);
+  if (method === "GET" && path === "/api/instrucoes") return sendJson(res, 200, instructionsView(root));
+  if (method === "POST" && path === "/api/instrucoes") return postInstructions(root, req, res);
 
   // Abre a pasta da história no gerenciador de arquivos. O navegador não manda caminho nenhum:
   // a pasta é sempre a que o "lore-pack ui" recebeu.
@@ -437,10 +441,26 @@ async function postSession(root: string, req: IncomingMessage, res: ServerRespon
   if (!body) return;
 
   const capitulo = typeof body.capitulo === "string" ? body.capitulo : "";
-  const plano = typeof body.plano === "string" ? body.plano.replace(/\r\n/g, "\n") : "";
+  const plano = readPlan(body);
   if (capitulo === "") return sendJson(res, 400, { erro: "Escolha o capítulo da sessão." });
   if (plano.trim() === "") return sendJson(res, 400, { erro: "Escreva o plano da cena antes de criar a sessão." });
 
+  const options = packOptionsFromBody(body);
+  if (!options.ok) return sendJson(res, 400, { erro: options.error });
+
+  const created = createSession({ ...options.options, root, capitulo, plan: plano });
+  if (!created.ok) return sendJson(res, 400, { erro: created.error });
+  sendJson(res, 201, { id: created.id, resumo: created.summary });
+}
+
+function readPlan(body: Record<string, unknown>): string {
+  return typeof body.plano === "string" ? body.plano.replace(/\r\n/g, "\n") : "";
+}
+
+// As opções do pack que o formulário manda, no formato que a CLI já sabe ler.
+function packOptionsFromBody(body: Record<string, unknown>): { ok: true; options: PackOptions } | { ok: false; error: string } {
+  // O campo do limite chega como texto; vazio é "sem limite".
+  const limite = typeof body.limite === "string" ? body.limite.trim() : "";
   const options = readPackOptions({
     com: typeof body.com === "string" ? [body.com] : undefined,
     // As caixas de seleção chegam como lista de ids; o que não for texto é ignorado.
@@ -450,12 +470,51 @@ async function postSession(root: string, req: IncomingMessage, res: ServerRespon
     sem: typeof body.sem === "string" ? [body.sem] : undefined,
     alfabeto: body.alfabeto === true,
     "sem-ultima-cena": body.semUltimaCena === true,
+    limite: limite === "" ? undefined : limite,
   });
+  // A mensagem da CLI cita a flag; na página, o campo tem outro nome.
+  if (!options.ok) return { ok: false, error: "O limite de tokens precisa ser um número inteiro, por exemplo: 8000." };
+  return options;
+}
+
+// O "pack" da CLI: monta o pacote sem criar sessão. O arquivo vai para .lore-pack/, fora da
+// história, e o texto volta para a página copiar. Nada do autor é alterado.
+async function postPack(root: string, req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const body = await readJson(req, res);
+  if (!body) return;
+  const plano = readPlan(body);
+  if (plano.trim() === "") return sendJson(res, 400, { erro: "Escreva o plano da cena antes de montar o pacote." });
+  const options = packOptionsFromBody(body);
   if (!options.ok) return sendJson(res, 400, { erro: options.error });
 
-  const created = createSession({ ...options.options, root, capitulo, plan: plano });
-  if (!created.ok) return sendJson(res, 400, { erro: created.error });
-  sendJson(res, 201, { id: created.id, resumo: created.summary });
+  // Com o capítulo escolhido no formulário, a última cena sai dele (ou dos anteriores).
+  const chapter = typeof body.capitulo === "string" && CHAPTER_ID.test(body.capitulo) ? body.capitulo : undefined;
+  const output = join(ensureLorePackDir(root), "pacote.md");
+  const result = writePack({ ...options.options, root, plan: plano, output, chapter });
+  if (result.exitCode !== 0) return sendJson(res, 400, { erro: result.stderr.trimEnd() });
+  sendJson(res, 200, { texto: readText(output), resumo: result.stdout });
+}
+
+// --- Instruções para a IA: o "atualizar-instrucoes" da CLI ---
+
+function instructionsView(root: string) {
+  return { arquivos: planInstructions(root).map((plan) => ({ arquivo: plan.path, acao: plan.action, diff: plan.diff })) };
+}
+
+// Arquivo que o autor editou só é trocado com "sobrescrever", depois de ele ver o diff na página (princípio 4).
+async function postInstructions(root: string, req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const body = await readJson(req, res);
+  if (!body) return;
+  const plans = planInstructions(root);
+  const edited = plans.filter((plan) => plan.action === "editado").map((plan) => plan.path);
+  if (edited.length > 0 && body.sobrescrever !== true) {
+    return sendJson(res, 409, {
+      erro: `Você editou ${edited.join(", ")} depois que o lore-pack gravou. Para não perder o seu texto, nada foi gravado.`,
+      ...instructionsView(root),
+    });
+  }
+  const changed = applyInstructions(root, plans);
+  sendJson(res, 200, { gravados: changed.map((plan) => plan.path), ...instructionsView(root) });
 }
 
 // O "capitulo novo" da CLI. O navegador só manda o título: o nome do arquivo é sempre o próximo cap-NN.

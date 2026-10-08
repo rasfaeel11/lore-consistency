@@ -30,6 +30,7 @@
       <p id="capitulo-status" class="dica" role="status"></p>
       <button id="botao-conversa" type="button">Conversar com a IA</button>
       <button id="abrir-pasta" type="button">Abrir pasta da história</button>
+      <button id="botao-instrucoes" type="button">Instruções da IA</button>
       <p id="pasta-status" class="dica" role="status"></p>
       <p id="aviso-erros" class="aviso" hidden></p>
       <button id="botao-problemas" type="button" hidden>Ver e resolver problemas</button>
@@ -70,10 +71,27 @@
             </label>
             <label class="caixa"><input name="alfabeto" type="checkbox" /> Incluir o alfabeto (sessão que vai criar nomes)</label>
             <label class="caixa"><input name="semUltimaCena" type="checkbox" /> Sem a última cena</label>
+            <label>
+              Limite de tokens (avisa se o pacote passar; vazio = sem limite)
+              <input name="limite" type="text" inputmode="numeric" placeholder="8000" />
+            </label>
           </details>
-          <button type="submit">Criar sessão</button>
+          <div class="acoes">
+            <button type="submit">Criar sessão</button>
+            <button id="so-pacote" type="button">Só montar o pacote</button>
+          </div>
+          <p class="dica">
+            "Só montar o pacote" não cria sessão nem grava nada na história: serve para ver o que entraria e colar
+            numa IA.
+          </p>
         </form>
         <pre id="erro-nova" class="erro" hidden></pre>
+        <div id="pacote-avulso" hidden>
+          <h3>Pacote montado</h3>
+          <pre id="pacote-avulso-resumo" class="resumo"></pre>
+          <button id="copiar-pacote-avulso" type="button">Copiar pacote</button>
+          <span id="pacote-avulso-status" class="dica" role="status"></span>
+        </div>
       </section>
 
       <section id="problemas" hidden>
@@ -107,6 +125,23 @@
             </div>
           </div>
         </div>
+      </section>
+
+      <section id="instrucoes" hidden>
+        <p class="marca">atualizar-instrucoes</p>
+        <h2>Instruções da IA</h2>
+        <p>
+          O lore-pack grava na pasta da história as regras que a IA segue: <code>CLAUDE.md</code> e
+          <code>AGENTS.md</code> (mesmo texto) e <code>.claude/settings.json</code>. Atualize depois de instalar uma
+          versão nova do lore-pack ou de mudar o <code>instrucoes-da-historia.md</code>.
+        </p>
+        <div id="instrucoes-lista"></div>
+        <div class="acoes">
+          <button id="instrucoes-gravar" type="button">Atualizar instruções</button>
+          <button id="instrucoes-sobrescrever" type="button" class="perigo" hidden>Sobrescrever o que eu editei e atualizar</button>
+          <button id="instrucoes-reler" type="button">Verificar de novo</button>
+        </div>
+        <p id="instrucoes-status" role="status"></p>
       </section>
 
       <section id="conversa" hidden>
@@ -223,6 +258,10 @@
 
           <div id="fechar" hidden>
             <p class="dica">Fechar é à parte de aplicar: dá para aplicar uma parte agora e continuar a sessão.</p>
+            <label id="fechar-resumo-campo" hidden>
+              Resumo da sessão (opcional; entra no sessao.md)
+              <textarea id="fechar-resumo" rows="3"></textarea>
+            </label>
             <div class="acoes">
               <button id="fechar-sessao" type="button">Fechar sessão</button>
               <button id="confirmar-fechar" type="button" class="perigo" hidden>Confirmar: fechar esta sessão</button>

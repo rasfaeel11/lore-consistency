@@ -92,19 +92,20 @@ const CORRECAO = "correcao";
 // Dono dos terminais da conversa fora de sessão, igual ao TALK_ID do servidor.
 const CONVERSA = "conversa";
 
-// Rotas pelo "#" do endereço: #nova, #problemas, #conversa, #sessao/<id> ou vazio.
+// Rotas pelo "#" do endereço: #nova, #problemas, #conversa, #instrucoes, #sessao/<id> ou vazio.
 // O id é o dono dos terminais da tela: a sessão, a correção do check ou a conversa.
 function rotaAtual() {
   const hash = decodeURIComponent(location.hash.slice(1));
   if (hash === "nova") return { tipo: "nova" };
   if (hash === "problemas") return { tipo: "problemas", id: CORRECAO };
   if (hash === "conversa") return { tipo: "conversa", id: CONVERSA };
+  if (hash === "instrucoes") return { tipo: "instrucoes" };
   if (hash.startsWith("sessao/")) return { tipo: "sessao", id: hash.slice("sessao/".length) };
   return { tipo: "inicio" };
 }
 
 function mostrar(secao) {
-  for (const id of ["inicio", "nova", "problemas", "conversa", "sessao"]) $(id).hidden = id !== secao;
+  for (const id of ["inicio", "nova", "problemas", "instrucoes", "conversa", "sessao"]) $(id).hidden = id !== secao;
   // O painel do terminal é um só: vai para a tela que está aberta (sessão, problemas ou conversa).
   if (secao === "sessao" || secao === "problemas" || secao === "conversa") $(secao).append($("painel-terminal"));
 }
@@ -115,6 +116,7 @@ async function navegar() {
   if (rota.tipo === "nova") return mostrarNova();
   if (rota.tipo === "problemas") return mostrarProblemas();
   if (rota.tipo === "conversa") return mostrarConversa();
+  if (rota.tipo === "instrucoes") return mostrarInstrucoes();
   if (rota.tipo === "sessao") return mostrarSessao(rota.id);
   mostrar("inicio");
 }
@@ -134,6 +136,7 @@ function mostrarNova() {
   select.value = escolhido || (select.options[select.options.length - 1]?.value ?? "");
   desenharReferencias();
   $("erro-nova").hidden = true;
+  $("pacote-avulso").hidden = true;
   mostrar("nova");
 }
 
@@ -271,6 +274,62 @@ $("problemas-confirmar").addEventListener("click", async () => {
     $("problemas-status").textContent = erro.message;
   }
 });
+
+// --- Instruções da IA: o "atualizar-instrucoes" da CLI ---
+
+const ACAO_INSTRUCAO = {
+  criado: "não existe ainda: será criado",
+  igual: "já está atualizado",
+  atualizado: "tem versão nova: será atualizado",
+  editado: 'você editou ("-" é o seu texto, "+" é o texto novo do lore-pack)',
+};
+
+async function mostrarInstrucoes() {
+  $("instrucoes-status").textContent = "";
+  mostrar("instrucoes");
+  try {
+    desenharInstrucoes(await api("/api/instrucoes"));
+  } catch (erro) {
+    $("instrucoes-status").textContent = erro.message;
+  }
+}
+
+function desenharInstrucoes(dados) {
+  const lista = $("instrucoes-lista");
+  lista.replaceChildren();
+  for (const arquivo of dados.arquivos) {
+    const titulo = document.createElement("h4");
+    titulo.textContent = `${arquivo.arquivo}: ${ACAO_INSTRUCAO[arquivo.acao] ?? arquivo.acao}`;
+    lista.append(titulo);
+    if (arquivo.acao === "editado") lista.append(desenharDiff(arquivo.diff));
+  }
+  const editados = dados.arquivos.some((a) => a.acao === "editado");
+  const pendentes = dados.arquivos.some((a) => a.acao !== "igual");
+  // Com arquivo editado, o único jeito de gravar é o botão que diz o que vai acontecer.
+  $("instrucoes-gravar").hidden = editados;
+  $("instrucoes-gravar").disabled = !pendentes;
+  $("instrucoes-sobrescrever").hidden = !editados;
+}
+
+async function gravarInstrucoes(sobrescrever) {
+  const resposta = await pedir("/api/instrucoes", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sobrescrever }),
+  });
+  const dados = await resposta.json();
+  if (dados.arquivos) desenharInstrucoes(dados);
+  $("instrucoes-status").textContent = resposta.ok
+    ? dados.gravados.length === 0
+      ? "Já estava tudo atualizado."
+      : `Gravado: ${dados.gravados.join(", ")}. Uma sessão aberta vai acusar essa mudança na guarda: é só clicar em "Manter".`
+    : (dados.erro ?? `Erro ${resposta.status}`);
+}
+
+$("botao-instrucoes").addEventListener("click", () => (location.hash = "#instrucoes"));
+$("instrucoes-gravar").addEventListener("click", () => gravarInstrucoes(false));
+$("instrucoes-sobrescrever").addEventListener("click", () => gravarInstrucoes(true));
+$("instrucoes-reler").addEventListener("click", mostrarInstrucoes);
 
 // --- Conversa com a IA fora de sessão: discutir os rumos, ou conversa livre ---
 
@@ -491,6 +550,7 @@ function limparFechamento() {
   $("fechamento-status").textContent = "";
   $("fechamento-check").hidden = true;
   $("fechar-erro").hidden = true;
+  $("fechar-resumo").value = "";
   mostrarConfirmacaoFechar(false);
   desenharFechamento({ existe: false, operacoes: [], erro: null, pedidoCorrecao: null, aviso: null });
   $("fechamento-colar").hidden = true;
@@ -503,6 +563,7 @@ function mostrarConfirmacaoAplicar(sim) {
 }
 
 function mostrarConfirmacaoFechar(sim) {
+  $("fechar-resumo-campo").hidden = !sim;
   $("fechar-sessao").hidden = sim;
   $("confirmar-fechar").hidden = !sim;
   $("cancelar-fechar").hidden = !sim;
@@ -650,7 +711,7 @@ $("fechar-sessao").addEventListener("click", () => mostrarConfirmacaoFechar(true
 $("cancelar-fechar").addEventListener("click", () => mostrarConfirmacaoFechar(false));
 $("confirmar-fechar").addEventListener("click", async () => {
   const id = rotaAtual().id;
-  const { ok, dados } = await postarSessao("fechar", {});
+  const { ok, dados } = await postarSessao("fechar", { resumo: $("fechar-resumo").value });
   mostrarConfirmacaoFechar(false);
   if (!ok) {
     // Por exemplo, a recusa da guarda: alteração direta ainda não resolvida.
@@ -750,25 +811,61 @@ $("copiar-pacote").addEventListener("click", async () => {
   await copiar(await resposta.text(), "Pacote copiado. Cole na conversa com a IA.");
 });
 
+// O que o formulário de nova sessão manda, para criar a sessão ou só montar o pacote.
+function dadosDaNova() {
+  const dados = new FormData($("form-nova"));
+  return {
+    capitulo: dados.get("capitulo"),
+    plano: dados.get("plano"),
+    com: dados.get("com"),
+    referencias: dados.getAll("referencias"),
+    sem: dados.get("sem"),
+    alfabeto: dados.get("alfabeto") === "on",
+    semUltimaCena: dados.get("semUltimaCena") === "on",
+    limite: dados.get("limite"),
+  };
+}
+
+// O "pack" da CLI: mostra o resumo e deixa copiar, sem criar sessão.
+let pacoteAvulso = "";
+
+$("so-pacote").addEventListener("click", async () => {
+  const botao = $("so-pacote");
+  botao.disabled = true;
+  $("erro-nova").hidden = true;
+  $("pacote-avulso").hidden = true;
+  try {
+    const pacote = await api("/api/pacote", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(dadosDaNova()),
+    });
+    pacoteAvulso = pacote.texto;
+    // A primeira linha do resumo é o caminho do arquivo, que aqui não interessa ao autor.
+    $("pacote-avulso-resumo").textContent = pacote.resumo.split("\n").slice(2).join("\n");
+    $("pacote-avulso-status").textContent = "";
+    $("pacote-avulso").hidden = false;
+  } catch (erro) {
+    $("erro-nova").textContent = erro.message;
+    $("erro-nova").hidden = false;
+  } finally {
+    botao.disabled = false;
+  }
+});
+$("copiar-pacote-avulso").addEventListener("click", () =>
+  copiar(pacoteAvulso, "Pacote copiado. Cole na conversa com a IA.", "pacote-avulso-status"),
+);
+
 $("form-nova").addEventListener("submit", async (evento) => {
   evento.preventDefault();
   const form = evento.target;
-  const dados = new FormData(form);
   const botao = form.querySelector('button[type="submit"]');
   botao.disabled = true;
   try {
     const criada = await api("/api/sessoes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        capitulo: dados.get("capitulo"),
-        plano: dados.get("plano"),
-        com: dados.get("com"),
-        referencias: dados.getAll("referencias"),
-        sem: dados.get("sem"),
-        alfabeto: dados.get("alfabeto") === "on",
-        semUltimaCena: dados.get("semUltimaCena") === "on",
-      }),
+      body: JSON.stringify(dadosDaNova()),
     });
     ultimoResumo = { id: criada.id, texto: criada.resumo };
     form.reset();

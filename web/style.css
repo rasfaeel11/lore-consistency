@@ -145,7 +145,8 @@ button:hover {
 
 /* Início e nova sessão leem melhor estreitos; a sessão usa a largura toda, por causa do terminal. */
 #inicio,
-#nova {
+#nova,
+#instrucoes {
   max-width: 900px;
 }
 

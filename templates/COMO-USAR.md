@@ -17,7 +17,7 @@ Uma pasta, arquivos curtos, uma conversa nova por capítulo. O que não está no
 - `lore-pack.config.json`: qual IA o terminal do app abre. O padrão é `"comando": "claude"`, com `"args": ["{{prompt}}"]` (o `{{prompt}}` vira a instrução de início da sessão). Para outra IA, troque o comando e os argumentos. Para desligar o terminal, use `"comando": "nenhum"`: o botão de copiar o pacote continua lá.
 - `modelos/`: modelos de ficha e de referência.
 
-Prefere janela a terminal? Rode `lore-pack ui` na pasta da história. O navegador abre sozinho; se não abrir, copie o endereço completo que ele mostrar (com o `?token=`, sem ele o app não responde): capítulos e sessões na barra lateral, botões de nova sessão, de copiar o pacote, de aplicar o fechamento, de fechar e de apagar uma sessão. Só funciona no seu computador.
+Prefere janela a terminal? Rode `lore-pack ui` na pasta da história. O navegador abre sozinho; se não abrir, copie o endereço completo que ele mostrar (com o `?token=`, sem ele o app não responde): capítulos e sessões na barra lateral, botões de novo capítulo, de nova sessão, de conversar com a IA fora de sessão (para discutir os rumos), de copiar o pacote, de aplicar o fechamento, de fechar e de apagar uma sessão. Só funciona no seu computador.
 - `prompts-de-sessao/`: os prompts que você cola na IA, numerados na ordem de uso.
 
 ## O ritual de cada sessão

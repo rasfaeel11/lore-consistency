@@ -55,7 +55,22 @@ export function writeInstructions(root: string): void {
   saveHashes(root, files);
 }
 
-type Plan = Generated & { action: "criado" | "igual" | "atualizado" | "editado"; diff: string };
+// "editado": o autor mexeu no arquivo depois que o lore-pack o gravou. Só esse traz o diff.
+export type InstructionPlan = Generated & { action: "criado" | "igual" | "atualizado" | "editado"; diff: string };
+
+// O que o "atualizar-instrucoes" faria com cada arquivo. Não grava nada. Usado pela CLI e pelo app.
+export function planInstructions(root: string): InstructionPlan[] {
+  const stored = readHashes(root);
+  return instructionFiles(root).map((file) => planFor(root, file, stored[file.path]));
+}
+
+// Grava o que mudou e devolve só esses. Quem chama já decidiu o que fazer com os editados.
+export function applyInstructions(root: string, plans: InstructionPlan[]): InstructionPlan[] {
+  const changed = plans.filter((plan) => plan.action !== "igual");
+  for (const plan of changed) writeGenerated(root, plan);
+  saveHashes(root, plans);
+  return changed;
+}
 
 export function atualizarInstrucoes(args: string[]): CliResult {
   let parsed;
@@ -76,8 +91,7 @@ export function atualizarInstrucoes(args: string[]): CliResult {
   const root = story.root;
 
   // Decide tudo antes de gravar: com um arquivo editado e sem --sobrescrever, nada muda.
-  const stored = readHashes(root);
-  const plans: Plan[] = instructionFiles(root).map((file) => planFor(root, file, stored[file.path]));
+  const plans = planInstructions(root);
   const edited = plans.filter((plan) => plan.action === "editado");
   if (edited.length > 0 && !parsed.values.sobrescrever) {
     const lines = ["Você editou estes arquivos depois que o lore-pack os gerou:", ""];
@@ -91,17 +105,14 @@ export function atualizarInstrucoes(args: string[]): CliResult {
     return fail(`${lines.join("\n")}`);
   }
 
-  const changed = plans.filter((plan) => plan.action !== "igual");
-  for (const plan of changed) writeGenerated(root, plan);
-  saveHashes(root, plans);
-
+  const changed = applyInstructions(root, plans);
   if (changed.length === 0) return ok("As instruções para a IA já estão atualizados (CLAUDE.md, AGENTS.md e .claude/settings.json).\n");
   const label = { criado: "criado", atualizado: "atualizado", editado: "sobrescrito", igual: "igual" };
   const report = changed.map((plan) => `  ${label[plan.action]}: ${plan.path}`).join("\n");
   return ok(`Instruções para a IA gravadas:\n${report}\n`);
 }
 
-function planFor(root: string, file: Generated, storedHash: string | undefined): Plan {
+function planFor(root: string, file: Generated, storedHash: string | undefined): InstructionPlan {
   const target = join(root, file.path);
   if (!isFile(target)) return { ...file, action: "criado", diff: "" };
   const current = readText(target);

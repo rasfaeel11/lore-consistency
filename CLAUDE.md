@@ -7,6 +7,7 @@ Ferramenta para quem escreve histórias com ajuda de IA. Organiza o mundo da his
 ## Status atual
 
 - **v0.1.0 pronta para publicar.** Todos os marcos do roteiro estão fechados; publicar no npm é um passo manual (`docs/PUBLICAR.md`).
+- Depois do M6 (2026-10-07): o app ganhou criar capítulo, conversa com a IA fora de sessão (discussão de rumos e conversa livre), pacote avulso, limite de tokens, resumo ao fechar e a tela das instruções. Só o `init` e o `ui` ficam fora do app.
 - Atualize esta linha ao fechar cada marco.
 
 ## Roteiro
@@ -41,7 +42,7 @@ Fora do escopo até a v1: chamar API de IA, contas de usuário, hospedagem onlin
 
 ```
 src/
-  core/        # funções puras: schemas da ficha e da sessão, validação, montagem do pacote, capítulos, sessões, guarda do cânone, mudanças do fechamento (changes.ts), pedido de correção do check (fix.ts) e configuração do terminal (terminal-config.ts)
+  core/        # funções puras: schemas da ficha e da sessão, validação, montagem do pacote, capítulos, sessões, guarda do cânone, mudanças do fechamento (changes.ts), pedido de correção do check (fix.ts), pedido da discussão de rumos (discussion.ts) e configuração do terminal (terminal-config.ts)
   cli/         # comandos (lista única em commands.ts): init, check, pack, capitulo, sessao, apply, atualizar-instrucoes, abrir, ui. Lê e escreve arquivos. Também: guard.ts (snapshot da guarda), instrucoes.ts (CLAUDE.md/AGENTS.md da história) e open-browser.ts (abre o navegador e a pasta da história).
   server/      # servidor do app local (app.ts: node:http + ws, só 127.0.0.1) e terminal embutido (terminal.ts: terminais e WebSocket, node-pty opcional; command.ts: acha o comando no PATH). Usa o núcleo e as funções da CLI.
   index.ts     # ponto de entrada da CLI
@@ -98,6 +99,7 @@ Cânone organizado por tema (magia, combate, política...), em `referencias/<id>
 - `sessoes/<id>/alteracoes-diretas.md`: gerado pelo "Manter" da guarda (`sessao verificar --manter` ou o botão do app), com as alterações diretas em arquivos protegidos que o autor decidiu manter.
 - Guarda do cânone: ao criar a sessão, o lore-pack copia os arquivos protegidos (`biblia.md`, `estado.md`, `alfabeto.md`, `fichas/`, `referencias/`, `capitulos/`, mais `CLAUDE.md`, `AGENTS.md`, `instrucoes-da-historia.md`, `.claude/settings.json` e `lore-pack.config.json`) para `.lore-pack/snapshots/<id>/`, pasta fora do git e ignorada pelo `check`. `sessao verificar` e o app comparam com o snapshot; `sessao fechar` recusa enquanto houver mudança não resolvida. É detecção depois do fato, não bloqueio.
 - Instruções da história: `instrucoes/instrucoes-ia.md` vira o `CLAUDE.md` e o `AGENTS.md`. Se a pasta tem `instrucoes-da-historia.md`, o `atualizar-instrucoes` copia o texto dele para o fim (seção "Regras desta história"). A IA pode editar o cânone com pedido do autor e consertar a forma sem pedido; o `.claude/settings.json` só nega as próprias instruções e o `lore-pack.config.json`.
+- Conversa fora de sessão: tela "Conversar com a IA" do app (`#conversa`). Com o campo "O que você quer decidir?" preenchido, grava o pedido em `.lore-pack/discussao.md` (`buildDiscussionRequest`, que lista **todas** as fichas e referências) e abre a IA com `DISCUSSION_START_PROMPT`; pelo "Abrir terminal", abre a IA sem prompt. Snapshot `conversa`, tirado só quando nenhuma conversa está rodando; a tela mostra o diff e tem "Desfazer tudo". "Copiar pedido completo" (`buildDiscussionPack`) leva o texto de tudo para outra IA. Nada da discussão é salvo.
 - Correção do check: na tela "Problemas" do app, "Resolver tudo com a IA" grava o pedido em `.lore-pack/correcao.md` (`buildFixRequest`), tira o snapshot `correcao` e abre um terminal com `FIX_START_PROMPT`. A tela mostra o diff do que mudou e tem "Desfazer tudo". Só uma correção roda por vez.
 - Cabeçalho do `sessao.md`: `id`, `capitulo` (precisa existir em `capitulos/`), `criada_em` (ISO), `status` (`aberta` | `fechada`), `fechada_em` (obrigatório se fechada). Corpo: `## Plano` e, depois de fechada, `## Resumo` opcional.
 
