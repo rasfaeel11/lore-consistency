@@ -9,6 +9,7 @@ export const PROMPT_MARKER = "{{prompt}}";
 export const NO_TERMINAL = "nenhum";
 
 const DEFAULT_ARGS = [PROMPT_MARKER];
+const EXAMPLE = `{ "terminal": { "comando": "claude", "args": ["${PROMPT_MARKER}"] } }`;
 
 const terminalSchema = z.strictObject({
   comando: z
@@ -40,7 +41,7 @@ export function parseTerminalConfig(text: string | undefined): ParsedConfig {
   } catch {
     return {
       ok: false,
-      error: `${CONFIG_FILE} não é um JSON válido. Confira vírgulas e aspas. Exemplo: { "terminal": { "comando": "claude", "args": ["${PROMPT_MARKER}"] } }`,
+      error: `${CONFIG_FILE} não é um JSON válido. Confira vírgulas e aspas. Exemplo: ${EXAMPLE}`,
     };
   }
 
@@ -51,6 +52,10 @@ export function parseTerminalConfig(text: string | undefined): ParsedConfig {
     if (issue?.code === "unrecognized_keys") {
       const where = issue.path.length > 0 ? ` em "${issue.path.join(".")}"` : "";
       message = `Campo desconhecido${where}: ${issue.keys.map((key) => `"${key}"`).join(", ")}. Os campos são "terminal.comando" e "terminal.args".`;
+      // Engano comum: escrever "comando" e "args" soltos, sem o "terminal" em volta.
+      if (issue.path.length === 0 && issue.keys.some((key) => key === "comando" || key === "args")) {
+        message = `"comando" e "args" ficam dentro de "terminal". Deixe o arquivo assim (com o seu comando): ${EXAMPLE}`;
+      }
     }
     return { ok: false, error: `${CONFIG_FILE}: ${message}` };
   }

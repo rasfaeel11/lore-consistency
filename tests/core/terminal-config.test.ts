@@ -57,6 +57,17 @@ describe("parseTerminalConfig", () => {
   });
 });
 
+describe("comando e args fora de terminal", () => {
+  it("o erro diz que eles ficam dentro de terminal e mostra o arquivo certo", () => {
+    const result = parseTerminalConfig('{ "comando": "claude", "args": ["{{prompt}}"] }');
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toContain('dentro de "terminal"');
+    expect(result.error).toContain('{ "terminal": { "comando": "claude", "args": ["{{prompt}}"] } }');
+  });
+});
+
 describe("fillArgs", () => {
   it("troca {{prompt}} em cada argumento, inclusive no meio do texto", () => {
     expect(fillArgs(["-i", "{{prompt}}", "--msg={{prompt}}"], "Leia o pacote.")).toEqual([
