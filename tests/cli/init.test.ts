@@ -50,7 +50,7 @@ describe("init", () => {
     main(["init", target], "0.0.0");
 
     const parsed = parseTerminalConfig(readFileSync(join(target, "lore-pack.config.json"), "utf8"));
-    expect(parsed).toEqual({ ok: true, terminal: { comando: "claude", args: ["{{prompt}}"] } });
+    expect(parsed).toEqual({ ok: true, terminal: { comando: "claude", args: ["{{prompt}}"] }, others: [] });
   });
 
   it("aceita uma pasta que já existe mas está vazia", () => {

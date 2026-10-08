@@ -23,17 +23,45 @@ const terminalSchema = z.strictObject({
     .default(DEFAULT_ARGS),
 });
 
+// Outros programas que o app pode abrir além do padrão (outra IA, um shell). Cada um tem um
+// nome, que é o que aparece na página e a única coisa que o navegador manda para escolher.
+const otherSchema = z.strictObject({
+  nome: z
+    .string({ error: 'Cada item de "outros_terminais" precisa de um "nome" (texto), por exemplo: "Antigravity".' })
+    .trim()
+    .min(1, { error: 'Um item de "outros_terminais" está com o "nome" vazio.' }),
+  comando: z
+    .string({ error: 'Cada item de "outros_terminais" precisa de um "comando" (texto), por exemplo: "agy".' })
+    .trim()
+    .min(1, { error: 'Um item de "outros_terminais" está com o "comando" vazio.' }),
+  args: z
+    .array(z.string(), { error: `Em "outros_terminais", "args" precisa ser uma lista de textos, por exemplo: ["${PROMPT_MARKER}"].` })
+    .default(DEFAULT_ARGS),
+});
+
 const configSchema = z.strictObject({
   terminal: terminalSchema.default({ comando: "claude", args: DEFAULT_ARGS }),
+  outros_terminais: z
+    .array(otherSchema, { error: '"outros_terminais" precisa ser uma lista, por exemplo: [{ "nome": "Antigravity", "comando": "agy" }].' })
+    .default([]),
 });
 
 export type TerminalConfig = z.infer<typeof terminalSchema>;
+export type TerminalChoice = z.infer<typeof otherSchema>;
 
-export type ParsedConfig = { ok: true; terminal: TerminalConfig } | { ok: false; error: string };
+export type ParsedConfig = { ok: true; terminal: TerminalConfig; others: TerminalChoice[] } | { ok: false; error: string };
+
+// Os programas que dá para abrir, com o padrão primeiro. O nome do padrão é o próprio comando.
+// Com o padrão em "nenhum", sobram só os outros; lista vazia é terminal desligado.
+export function terminalChoices(config: { terminal: TerminalConfig; others: TerminalChoice[] }): TerminalChoice[] {
+  const { comando, args } = config.terminal;
+  const main = comando === NO_TERMINAL ? [] : [{ nome: comando, comando, args }];
+  return [...main, ...config.others];
+}
 
 // Sem arquivo (undefined), vale o padrão. Erro sempre diz o arquivo e como consertar.
 export function parseTerminalConfig(text: string | undefined): ParsedConfig {
-  if (text === undefined) return { ok: true, terminal: { comando: "claude", args: [...DEFAULT_ARGS] } };
+  if (text === undefined) return { ok: true, terminal: { comando: "claude", args: [...DEFAULT_ARGS] }, others: [] };
 
   let data: unknown;
   try {
@@ -51,7 +79,7 @@ export function parseTerminalConfig(text: string | undefined): ParsedConfig {
     let message = issue?.message ?? "formato inválido";
     if (issue?.code === "unrecognized_keys") {
       const where = issue.path.length > 0 ? ` em "${issue.path.join(".")}"` : "";
-      message = `Campo desconhecido${where}: ${issue.keys.map((key) => `"${key}"`).join(", ")}. Os campos são "terminal.comando" e "terminal.args".`;
+      message = `Campo desconhecido${where}: ${issue.keys.map((key) => `"${key}"`).join(", ")}. Os campos são "terminal.comando", "terminal.args" e "outros_terminais" (lista de "nome", "comando" e "args").`;
       // Engano comum: escrever "comando" e "args" soltos, sem o "terminal" em volta.
       if (issue.path.length === 0 && issue.keys.some((key) => key === "comando" || key === "args")) {
         message = `"comando" e "args" ficam dentro de "terminal". Deixe o arquivo assim (com o seu comando): ${EXAMPLE}`;
@@ -59,7 +87,14 @@ export function parseTerminalConfig(text: string | undefined): ParsedConfig {
     }
     return { ok: false, error: `${CONFIG_FILE}: ${message}` };
   }
-  return { ok: true, terminal: parsed.data.terminal };
+  const config = { terminal: parsed.data.terminal, others: parsed.data.outros_terminais };
+  // O nome é como a página escolhe o programa: dois iguais, e um deles nunca abriria.
+  const names = terminalChoices(config).map((choice) => choice.nome);
+  const repeated = names.find((name, index) => names.indexOf(name) !== index);
+  if (repeated !== undefined) {
+    return { ok: false, error: `${CONFIG_FILE}: o nome "${repeated}" aparece mais de uma vez (em "outros_terminais" ou igual ao "terminal.comando"). Dê um nome diferente a cada um.` };
+  }
+  return { ok: true, ...config };
 }
 
 // Troca {{prompt}} em cada argumento. Cada item continua sendo um argumento só:

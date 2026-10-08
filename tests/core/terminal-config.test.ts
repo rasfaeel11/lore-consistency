@@ -1,27 +1,27 @@
 import { describe, expect, it } from "vitest";
-import { fillArgs, parseTerminalConfig } from "../../src/core/terminal-config.js";
+import { fillArgs, parseTerminalConfig, terminalChoices } from "../../src/core/terminal-config.js";
 
 describe("parseTerminalConfig", () => {
   it("sem arquivo, usa o padrão: claude com o prompt", () => {
-    expect(parseTerminalConfig(undefined)).toEqual({ ok: true, terminal: { comando: "claude", args: ["{{prompt}}"] } });
+    expect(parseTerminalConfig(undefined)).toMatchObject({ ok: true, terminal: { comando: "claude", args: ["{{prompt}}"] } });
   });
 
   it("aceita comando e argumentos próprios", () => {
     const text = JSON.stringify({ terminal: { comando: "gemini", args: ["-i", "{{prompt}}"] } });
 
-    expect(parseTerminalConfig(text)).toEqual({ ok: true, terminal: { comando: "gemini", args: ["-i", "{{prompt}}"] } });
+    expect(parseTerminalConfig(text)).toMatchObject({ ok: true, terminal: { comando: "gemini", args: ["-i", "{{prompt}}"] } });
   });
 
   it("args é opcional", () => {
     const text = JSON.stringify({ terminal: { comando: "codex" } });
 
-    expect(parseTerminalConfig(text)).toEqual({ ok: true, terminal: { comando: "codex", args: ["{{prompt}}"] } });
+    expect(parseTerminalConfig(text)).toMatchObject({ ok: true, terminal: { comando: "codex", args: ["{{prompt}}"] } });
   });
 
   it('"nenhum" desliga o terminal', () => {
     const result = parseTerminalConfig(JSON.stringify({ terminal: { comando: "nenhum" } }));
 
-    expect(result).toEqual({ ok: true, terminal: { comando: "nenhum", args: ["{{prompt}}"] } });
+    expect(result).toMatchObject({ ok: true, terminal: { comando: "nenhum", args: ["{{prompt}}"] } });
   });
 
   it("JSON quebrado: diz o arquivo e o que fazer", () => {
@@ -54,6 +54,53 @@ describe("parseTerminalConfig", () => {
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toContain("comand");
+  });
+});
+
+describe("outros terminais", () => {
+  const parse = (config: unknown) => parseTerminalConfig(JSON.stringify(config));
+  const choices = (config: unknown) => {
+    const parsed = parse(config);
+    return parsed.ok ? terminalChoices(parsed).map((choice) => choice.nome) : parsed.error;
+  };
+
+  it("sem a lista, a única escolha é o comando do terminal padrão", () => {
+    expect(choices({ terminal: { comando: "claude" } })).toEqual(["claude"]);
+    expect(terminalChoices(parseTerminalConfig(undefined) as never).map((c) => c.nome)).toEqual(["claude"]);
+  });
+
+  it("a lista entra depois do padrão, cada um com nome, comando e args", () => {
+    const parsed = parse({
+      terminal: { comando: "claude" },
+      outros_terminais: [{ nome: "Antigravity", comando: "agy", args: ["--prompt-interactive={{prompt}}"] }, { nome: "Shell", comando: "bash", args: [] }],
+    });
+
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(terminalChoices(parsed)).toEqual([
+      { nome: "claude", comando: "claude", args: ["{{prompt}}"] },
+      { nome: "Antigravity", comando: "agy", args: ["--prompt-interactive={{prompt}}"] },
+      { nome: "Shell", comando: "bash", args: [] },
+    ]);
+  });
+
+  it('com o padrão em "nenhum", sobram só os outros', () => {
+    expect(choices({ terminal: { comando: "nenhum" }, outros_terminais: [{ nome: "Antigravity", comando: "agy" }] })).toEqual(["Antigravity"]);
+    expect(choices({ terminal: { comando: "nenhum" } })).toEqual([]);
+  });
+
+  it("nome repetido, ou igual ao comando padrão, dá erro dizendo qual", () => {
+    const repeated = choices({ terminal: { comando: "claude" }, outros_terminais: [{ nome: "claude", comando: "agy" }] });
+
+    expect(repeated).toContain("outros_terminais");
+    expect(repeated).toContain('"claude"');
+  });
+
+  it("item sem nome dá erro dizendo o campo", () => {
+    const result = parse({ outros_terminais: [{ comando: "agy" }] });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toContain("nome");
   });
 });
 

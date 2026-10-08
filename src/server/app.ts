@@ -23,7 +23,7 @@ import { WEB_DIR } from "../cli/paths.js";
 import { checkGuard, ensureLorePackDir, hasSnapshot, keepChanges, revertChanges, takeSnapshot } from "../cli/guard.js";
 import { closeSessionFolder, createSession, deleteSession } from "../cli/sessao.js";
 import { isFile, readStoryFiles, readText } from "../cli/story-files.js";
-import { TerminalManager, loadNodePty, type PtyLoad } from "./terminal.js";
+import { TerminalManager, loadNodePty, type OpenResult, type PtyLoad } from "./terminal.js";
 
 // Princípio 8: o app só escuta no próprio computador.
 const HOST = "127.0.0.1";
@@ -197,7 +197,7 @@ async function handle(app: App, server: Server, req: IncomingMessage, res: Serve
     if (app.terminals.list().some((t) => t.sessao === FIX_ID && t.rodando)) {
       return sendJson(res, 409, { erro: "Já há uma correção rodando. Espere ela terminar ou feche o terminal dela." });
     }
-    return path.endsWith("/reverter") ? postFixRevert(root, res) : postFixTerminal(app, res);
+    return path.endsWith("/reverter") ? postFixRevert(root, res) : postFixTerminal(app, req, res);
   }
 
   // Conversa fora de sessão: livre, ou para discutir os rumos. O navegador manda só o assunto,
@@ -214,19 +214,20 @@ async function handle(app: App, server: Server, req: IncomingMessage, res: Serve
     return postTalkRevert(root, res);
   }
 
-  // Terminal embutido. O navegador só diz QUAL sessão: o corpo do pedido é ignorado, e
-  // comando, argumentos, pasta e ambiente vêm do lore-pack.config.json e do servidor.
+  // Terminal embutido. O navegador só diz QUAL sessão e, se houver mais de um programa no
+  // lore-pack.config.json, o NOME de qual abrir. Comando, argumentos, pasta e ambiente vêm
+  // sempre desse arquivo e do servidor.
   if (method === "GET" && path === "/api/terminal") return sendJson(res, 200, await app.terminals.status());
   if (method === "GET" && path === "/api/terminais") return sendJson(res, 200, app.terminals.list());
   const openMatch = OPEN_TERMINAL_ROUTE.exec(path);
   if (method === "POST" && openMatch) {
-    if (!isJson(req)) return sendJson(res, 415, { erro: "Mande os dados como JSON." });
+    const body = await readJson(req, res);
+    if (!body) return;
     const id = decodeURIComponent(openMatch[1] ?? "");
     if (!isSessionId(id) || !isFile(join(root, "sessoes", id, "sessao.md"))) {
       return sendJson(res, 404, { erro: `A sessão "${id}" não existe em sessoes/.` });
     }
-    const opened = await app.terminals.open(id);
-    return opened.ok ? sendJson(res, 201, { id: opened.id }) : sendJson(res, opened.status, { erro: opened.error });
+    return sendOpened(res, await app.terminals.open(id, undefined, readChoice(body)));
   }
   const terminalMatch = TERMINAL_ROUTE.exec(path);
   if (method === "DELETE" && terminalMatch) {
@@ -326,7 +327,9 @@ function problemsView(root: string) {
 }
 
 // Grava o pedido em .lore-pack/correcao.md, guarda uma cópia dos arquivos e abre a IA.
-async function postFixTerminal(app: App, res: ServerResponse): Promise<void> {
+async function postFixTerminal(app: App, req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const body = await readJson(req, res);
+  if (!body) return;
   const view = problemsView(app.root);
   if (view.pedido === null) return sendJson(res, 409, { erro: "O check não achou nenhum problema: não há o que corrigir." });
   // Confere antes de gravar qualquer coisa: com o terminal desligado, nada muda na pasta.
@@ -338,8 +341,18 @@ async function postFixTerminal(app: App, res: ServerResponse): Promise<void> {
   // Snapshot novo a cada correção: o "Desfazer" volta ao estado de antes desta conversa.
   takeSnapshot(app.root, FIX_ID);
 
-  const opened = await app.terminals.open(FIX_ID, FIX_START_PROMPT);
-  return opened.ok ? sendJson(res, 201, { id: opened.id }) : sendJson(res, opened.status, { erro: opened.error });
+  sendOpened(res, await app.terminals.open(FIX_ID, FIX_START_PROMPT, readChoice(body)));
+}
+
+// O nome de um programa do lore-pack.config.json. É só o que o navegador escolhe: o servidor
+// procura o nome no arquivo, e nome que não está lá não abre nada.
+function readChoice(body: Record<string, unknown>): string | undefined {
+  return typeof body.terminal === "string" && body.terminal !== "" ? body.terminal : undefined;
+}
+
+function sendOpened(res: ServerResponse, opened: OpenResult): void {
+  if (opened.ok) return sendJson(res, 201, { id: opened.id, nome: opened.nome });
+  sendJson(res, opened.status, { erro: opened.error });
 }
 
 // O segundo clique em "Desfazer" na página é a confirmação do princípio 4.
@@ -399,8 +412,7 @@ async function postTalkTerminal(app: App, req: IncomingMessage, res: ServerRespo
     writeFileSync(join(app.root, DISCUSSION_FILE), buildDiscussionRequest(topic, readStoryFiles(app.root)));
   }
 
-  const opened = await app.terminals.open(TALK_ID, topic === "" ? "" : DISCUSSION_START_PROMPT);
-  return opened.ok ? sendJson(res, 201, { id: opened.id }) : sendJson(res, opened.status, { erro: opened.error });
+  sendOpened(res, await app.terminals.open(TALK_ID, topic === "" ? "" : DISCUSSION_START_PROMPT, readChoice(body)));
 }
 
 // O segundo clique em "Desfazer" na página é a confirmação do princípio 4.

@@ -142,7 +142,7 @@ describe("terminal embutido", SLOW, () => {
 
       const body = await (await api("/api/terminal")).json();
 
-      expect(body).toEqual({ ligado: true, comando: process.execPath });
+      expect(body).toEqual({ ligado: true, comando: process.execPath, opcoes: [process.execPath] });
     });
 
     it('desligado com "nenhum", explicando o motivo', async () => {
@@ -347,6 +347,73 @@ describe("terminal embutido", SLOW, () => {
     );
   });
 
+  describe("mais de um programa (outros_terminais)", () => {
+    // O padrão é a "IA" que ecoa o prompt; a outra fica viva e mostra o próprio nome.
+    const twoPrograms = () =>
+      writeFileSync(
+        join(story, "lore-pack.config.json"),
+        JSON.stringify({
+          terminal: { comando: process.execPath, args: ["-e", SCRIPTS.vivo, "{{prompt}}"] },
+          outros_terminais: [{ nome: "Outra", comando: process.execPath, args: ["-e", "console.log('SOU A OUTRA:' + process.argv[1]); setInterval(() => {}, 1000)", "{{prompt}}"] }],
+        }),
+      );
+
+    it.skipIf(!ptyAvailable)("o estado lista as escolhas, com o padrão primeiro", async () => {
+      twoPrograms();
+      await start();
+
+      const body = await (await api("/api/terminal")).json();
+
+      expect(body.opcoes).toEqual([process.execPath, "Outra"]);
+    });
+
+    it.skipIf(!ptyAvailable)(
+      "abre o padrão e o outro ao mesmo tempo, na mesma sessão, cada um com o seu programa",
+      async () => {
+        twoPrograms();
+        await start();
+
+        const first = await openTerminal();
+        const second = await openTerminal({ terminal: "Outra" });
+        expect(second.response.status).toBe(201);
+        expect(second.body.nome).toBe("Outra");
+        const client = connect(second.body.id);
+        await client.waitFor(() => client.output().includes("SOU A OUTRA"), "a saída do outro programa");
+
+        expect(client.output()).toContain(`SOU A OUTRA:Leia o arquivo sessoes/${OPEN}/pacote.md`);
+        const list = await (await api("/api/terminais")).json();
+        expect(list.map((t: { id: string; nome: string; rodando: boolean }) => [t.id, t.nome, t.rodando])).toEqual([
+          [first.body.id, process.execPath, true],
+          [second.body.id, "Outra", true],
+        ]);
+        client.ws.close();
+      },
+    );
+
+    it.skipIf(!ptyAvailable)("a conversa livre também abre o outro programa", async () => {
+      twoPrograms();
+      await start();
+
+      const response = await api("/api/conversa/terminais", { method: "POST", body: JSON.stringify({ terminal: "Outra" }) });
+      const client = connect((await response.json()).id);
+      await client.waitFor(() => client.output().includes("SOU A OUTRA"), "a saída do outro programa");
+
+      expect(client.output()).toContain("SOU A OUTRA:undefined");
+      client.ws.close();
+    });
+
+    it("nome que não está no arquivo dá 400 e não abre nada", async () => {
+      twoPrograms();
+      await start();
+
+      const { response, body } = await openTerminal({ terminal: "calc.exe" });
+
+      expect(response.status).toBe(400);
+      expect(body.erro).toContain('"calc.exe"');
+      expect(await (await api("/api/terminais")).json()).toEqual([]);
+    });
+  });
+
   describe("conversa fora de sessão (POST /api/conversa/terminais)", () => {
     const talk = (body: unknown = {}) => api("/api/conversa/terminais", { method: "POST", body: JSON.stringify(body) });
 
@@ -530,7 +597,7 @@ describe("terminal embutido", SLOW, () => {
         await second.waitFor(() => second.output().includes("PID:"), "a saída repetida");
 
         const list = await (await api("/api/terminais")).json();
-        expect(list).toEqual([{ id: body.id, sessao: OPEN, rodando: true, codigo: null }]);
+        expect(list).toEqual([{ id: body.id, sessao: OPEN, nome: process.execPath, rodando: true, codigo: null }]);
         second.ws.close();
       },
     );

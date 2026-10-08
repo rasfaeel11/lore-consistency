@@ -6,7 +6,7 @@ import { dirname, join } from "node:path";
 import type { IPty } from "node-pty";
 import type { WebSocket } from "ws";
 import { buildStartPrompt } from "../core/session.js";
-import { CONFIG_FILE, NO_TERMINAL, fillArgs, parseTerminalConfig } from "../core/terminal-config.js";
+import { CONFIG_FILE, NO_TERMINAL, fillArgs, parseTerminalConfig, terminalChoices } from "../core/terminal-config.js";
 import { checkGuard, hasSnapshot, takeSnapshot } from "../cli/guard.js";
 import { isFile, readText } from "../cli/story-files.js";
 import { batchArgsProblem, resolveCommand, type ResolvedCommand } from "./command.js";
@@ -64,6 +64,8 @@ const KILL_WAIT_MS = 8000;
 type Terminal = {
   id: string;
   sessionId: string;
+  // Qual programa do lore-pack.config.json está rodando (o nome que a aba mostra).
+  name: string;
   pty: IPty;
   buffer: string;
   clients: Set<WebSocket>;
@@ -73,8 +75,9 @@ type Terminal = {
   exited: Promise<void>;
 };
 
-export type TerminalStatus = { ligado: true; comando: string } | { ligado: false; motivo: string };
-export type OpenResult = { ok: true; id: string } | { ok: false; status: number; error: string };
+// opcoes: os nomes dos programas que dá para abrir, com o padrão primeiro.
+export type TerminalStatus = { ligado: true; comando: string; opcoes: string[] } | { ligado: false; motivo: string };
+export type OpenResult = { ok: true; id: string; nome: string } | { ok: false; status: number; error: string };
 
 // Mensagens que o navegador pode mandar. Nenhuma escolhe comando, pasta ou ambiente.
 type ClientMessage = { tipo: "entrada"; dados: string } | { tipo: "tamanho"; colunas: number; linhas: number };
@@ -91,13 +94,14 @@ export class TerminalManager {
   // O motivo de estar desligado aparece na tela, então diz o que fazer.
   async status(): Promise<TerminalStatus> {
     const ready = await this.prepare();
-    return ready.ok ? { ligado: true, comando: ready.command.path } : { ligado: false, motivo: ready.error };
+    return ready.ok ? { ligado: true, comando: ready.command.path, opcoes: ready.names } : { ligado: false, motivo: ready.error };
   }
 
   // sessionId é o dono do terminal: uma sessão de escrita, a correção do check (FIX_ID) ou a
   // conversa fora de sessão (TALK_ID). Prompt vazio abre o programa sem pedido nenhum.
-  async open(sessionId: string, prompt: string = buildStartPrompt(sessionId)): Promise<OpenResult> {
-    const ready = await this.prepare();
+  // choice é o nome de um programa do lore-pack.config.json; sem ele, abre o padrão.
+  async open(sessionId: string, prompt: string = buildStartPrompt(sessionId), choice?: string): Promise<OpenResult> {
+    const ready = await this.prepare(choice);
     if (!ready.ok) return { ok: false, status: ready.status, error: ready.error };
 
     const args = fillArgs(ready.args, prompt);
@@ -135,6 +139,7 @@ export class TerminalManager {
     const terminal: Terminal = {
       id: randomBytes(8).toString("hex"),
       sessionId,
+      name: ready.name,
       pty,
       buffer: "",
       clients: new Set(),
@@ -156,7 +161,7 @@ export class TerminalManager {
       if (report) this.broadcast(terminal, { tipo: "guarda", mudancas: report.changes.map((change) => change.path) });
     });
 
-    return { ok: true, id: terminal.id };
+    return { ok: true, id: terminal.id, nome: terminal.name };
   }
 
   has(id: string): boolean {
@@ -167,6 +172,7 @@ export class TerminalManager {
     return [...this.terminals.values()].map((t) => ({
       id: t.id,
       sessao: t.sessionId,
+      nome: t.name,
       rodando: t.exitCode === null,
       codigo: t.exitCode,
     }));
@@ -223,8 +229,8 @@ export class TerminalManager {
 
   // Confere tudo o que precisa para abrir um terminal. A configuração é lida do disco a cada
   // vez, então editar o lore-pack.config.json vale sem reiniciar o app.
-  private async prepare(): Promise<
-    | { ok: true; pty: PtyModule; command: ResolvedCommand; args: string[] }
+  private async prepare(choice?: string): Promise<
+    | { ok: true; pty: PtyModule; command: ResolvedCommand; args: string[]; name: string; names: string[] }
     | { ok: false; status: number; error: string }
   > {
     this.ptyLoad ??= this.loadPty();
@@ -240,14 +246,24 @@ export class TerminalManager {
     const configPath = join(this.root, CONFIG_FILE);
     const config = parseTerminalConfig(isFile(configPath) ? readText(configPath) : undefined);
     if (!config.ok) return { ok: false, status: 409, error: `${config.error} ${COPY_HINT}` };
-    const { comando, args } = config.terminal;
-    if (comando === NO_TERMINAL) {
+    const choices = terminalChoices(config);
+    const names = choices.map((item) => item.nome);
+    const chosen = choice === undefined ? choices[0] : choices.find((item) => item.nome === choice);
+    if (choices.length === 0) {
       return {
         ok: false,
         status: 409,
         error: `O terminal está desligado: "terminal.comando" é "${NO_TERMINAL}" no ${CONFIG_FILE}. ${COPY_HINT}`,
       };
     }
+    if (!chosen) {
+      return {
+        ok: false,
+        status: 400,
+        error: `O ${CONFIG_FILE} não tem um terminal chamado "${choice}". Os que existem: ${names.join(", ")}.`,
+      };
+    }
+    const { comando, args } = chosen;
 
     const command = resolveCommand(comando, process.platform, process.env, isFile);
     if (!command) {
@@ -257,7 +273,7 @@ export class TerminalManager {
         error: `O comando "${comando}" não foi encontrado neste computador. Instale a ferramenta de IA (o padrão é o Claude Code, comando "claude") ou troque "terminal.comando" no ${CONFIG_FILE}. ${COPY_HINT}`,
       };
     }
-    return { ok: true, pty: load.pty, command, args };
+    return { ok: true, pty: load.pty, command, args, name: chosen.nome, names };
   }
 }
 

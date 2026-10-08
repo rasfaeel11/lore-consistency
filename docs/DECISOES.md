@@ -412,3 +412,11 @@ Pedido do autor: criar capítulo, abrir a IA sem sessão e discutir os rumos da 
 - **"Só montar o pacote"** (`POST /api/pacote`) é o `pack` da CLI. O arquivo vai para `.lore-pack/pacote.md`, e não para a raiz da história como na CLI: a página só precisa do texto para copiar, e assim nada do autor é tocado.
 - **"Instruções da IA"** (`#instrucoes`) é o `atualizar-instrucoes`. `planInstructions` e `applyInstructions` saíram de dentro do comando. A tela mostra o que seria feito antes de gravar; com arquivo editado pelo autor, mostra o diff e o único botão que grava é "Sobrescrever o que eu editei e atualizar" (princípio 4).
 - **Fica só na CLI:** `init` (o app abre numa pasta que já é história) e o próprio `ui`.
+
+### Mais de um programa no terminal (`outros_terminais`)
+- **Problema:** todo terminal rodava o mesmo comando do `lore-pack.config.json`. Dava para abrir quatro abas, mas todas do Claude Code; quem queria a CLI do Antigravity ao lado não tinha como.
+- **Formato:** `terminal` continua sendo o padrão, e `outros_terminais` é uma lista opcional de `{ nome, comando, args }`. Arquivo antigo continua valendo sem mudar nada. Nome repetido (ou igual ao comando padrão) é erro, porque é pelo nome que a página escolhe.
+- **Segurança:** a regra não mudou. O navegador manda só o nome; comando e argumentos vêm do arquivo, e nome que não está lá dá 400. O `.claude/settings.json` da história já impede a IA de editar esse arquivo.
+- **Shell:** não existe um botão "abrir shell" pronto. Quem quiser põe `{ "nome": "Shell", "comando": "bash", "args": [] }` na lista: é uma escolha do autor, escrita no arquivo dele.
+- **Argumento com o prompt:** para programa que recebe o pedido por flag, use a forma `--flag={{prompt}}` num argumento só. Assim, na conversa livre (prompt vazio), o argumento inteiro sai e a flag não fica sozinha.
+- **Guarda:** os dois programas da mesma sessão dividem o mesmo snapshot; a guarda não sabe qual deles mudou o arquivo.

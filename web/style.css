@@ -331,6 +331,12 @@ button.perigo {
   margin-bottom: 8px;
 }
 
+/* Só aparece com mais de um programa no lore-pack.config.json. */
+#escolha-terminal {
+  width: auto;
+  margin-top: 0;
+}
+
 #abas-terminal {
   display: flex;
   flex-wrap: wrap;

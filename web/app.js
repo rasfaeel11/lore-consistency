@@ -910,10 +910,11 @@ async function mostrarTerminais(sessaoId) {
   // Desligado (config "nenhum", comando não instalado, node-pty ausente): o motivo fica na tela.
   $("abrir-terminal").disabled = !estado.ligado;
   if (!estado.ligado) avisoTerminal(estado.motivo);
+  desenharEscolha(estado.ligado ? estado.opcoes : []);
 
   try {
     for (const t of await api("/api/terminais")) {
-      if (!terminais.has(t.id)) await criarTerminal(t.id, t.sessao);
+      if (!terminais.has(t.id)) await criarTerminal(t.id, t.sessao, t.nome);
     }
   } catch (erro) {
     avisoTerminal(`Não consegui mostrar os terminais: ${erro.message}`);
@@ -921,7 +922,22 @@ async function mostrarTerminais(sessaoId) {
   desenharAbas(sessaoId);
 }
 
-async function criarTerminal(id, sessao) {
+// Os programas do lore-pack.config.json (o padrão primeiro). Com um só, não há o que escolher.
+function desenharEscolha(opcoes) {
+  const select = $("escolha-terminal");
+  const escolhido = select.value;
+  select.replaceChildren();
+  for (const nome of opcoes) {
+    const opcao = document.createElement("option");
+    opcao.value = nome;
+    opcao.textContent = nome;
+    select.append(opcao);
+  }
+  if (opcoes.includes(escolhido)) select.value = escolhido;
+  select.hidden = opcoes.length < 2;
+}
+
+async function criarTerminal(id, sessao, nome) {
   const { Terminal, FitAddon } = await carregarXterm();
   const el = document.createElement("div");
   el.className = "terminal";
@@ -938,7 +954,7 @@ async function criarTerminal(id, sessao) {
   term.loadAddon(fit);
   term.open(el);
 
-  const t = { id, sessao, term, fit, el, ws: null, rodando: true, codigo: null, desconectado: false };
+  const t = { id, sessao, nome, term, fit, el, ws: null, rodando: true, codigo: null, desconectado: false };
   terminais.set(id, t);
   term.onData((dados) => enviar(t, { tipo: "entrada", dados }));
   term.onResize(({ cols, rows }) => enviar(t, { tipo: "tamanho", colunas: cols, linhas: rows }));
@@ -1031,7 +1047,7 @@ function desenharAbas(sessaoId) {
       : t.desconectado
         ? " · desconectado"
         : " · rodando";
-    nome.append(`Terminal ${indice + 1}`, estado);
+    nome.append(`${indice + 1} · ${t.nome ?? "terminal"}`, estado);
     nome.addEventListener("click", () => {
       terminalAtivo = t.id;
       desenharAbas(sessaoId);
@@ -1088,12 +1104,13 @@ async function abrirTerminal(corpo = {}) {
   avisoTerminal(null);
   try {
     // Qual programa roda é decidido pelo lore-pack.config.json, no servidor, nunca por este pedido.
-    const { id } = await api(caminho, {
+    // Do programa, vai só o nome escolhido na lista; o servidor procura o nome no arquivo.
+    const { id, nome } = await api(caminho, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(corpo),
+      body: JSON.stringify({ ...corpo, terminal: $("escolha-terminal").value }),
     });
-    const t = await criarTerminal(id, sessaoId);
+    const t = await criarTerminal(id, sessaoId, nome);
     terminalAtivo = id;
     desenharAbas(sessaoId);
     t.term.focus();
