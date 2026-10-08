@@ -28,6 +28,7 @@
         </div>
       </form>
       <p id="capitulo-status" class="dica" role="status"></p>
+      <button id="botao-conversa" type="button">Conversar com a IA</button>
       <button id="abrir-pasta" type="button">Abrir pasta da história</button>
       <p id="pasta-status" class="dica" role="status"></p>
       <p id="aviso-erros" class="aviso" hidden></p>
@@ -104,6 +105,48 @@
               <button id="problemas-confirmar" type="button" class="perigo" hidden></button>
               <button id="problemas-cancelar" type="button" hidden>Cancelar</button>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="conversa" hidden>
+        <div class="sessao-info">
+          <p class="marca">fora de sessão</p>
+          <h2>Conversar com a IA</h2>
+          <p>
+            Abre a IA na pasta da história sem criar sessão: para discutir os rumos antes de planejar um capítulo,
+            ou para qualquer outro pedido.
+          </p>
+
+          <h3>Discutir os rumos</h3>
+          <label>
+            O que você quer decidir?
+            <textarea id="conversa-assunto" rows="6" placeholder="O que acontece com a Ana até o fim do arco? Já é hora de pagar o setup do farol?"></textarea>
+          </label>
+          <p id="conversa-contexto" class="dica"></p>
+          <div class="acoes">
+            <button id="discutir" type="button">Discutir com a IA</button>
+            <button id="copiar-discussao" type="button">Copiar pedido completo</button>
+          </div>
+          <p class="dica">
+            "Copiar pedido completo" é para outra IA (Gemini, ChatGPT): leva a bíblia, o estado e o texto de todas
+            as fichas e referências.
+          </p>
+
+          <h3>Conversa livre</h3>
+          <p class="dica">
+            Para qualquer outro pedido, clique em "Abrir terminal", ao lado: a IA abre na pasta, sem pedido nenhum.
+          </p>
+          <p id="conversa-status" role="status"></p>
+
+          <h3>O que a conversa mudou</h3>
+          <p id="conversa-titulo" class="dica"></p>
+          <div id="conversa-lista"></div>
+          <div class="acoes">
+            <button id="conversa-reler" type="button">Verificar alterações</button>
+            <button id="conversa-reverter" type="button" hidden>Desfazer tudo</button>
+            <button id="conversa-confirmar" type="button" class="perigo" hidden></button>
+            <button id="conversa-cancelar" type="button" hidden>Cancelar</button>
           </div>
         </div>
       </section>

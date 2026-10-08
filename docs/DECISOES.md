@@ -390,3 +390,19 @@ Especificação: `docs/prompts-dev/M5.md`, na versão ajustada ao código. O que
 ### Abrir a pasta
 - `lore-pack abrir` e `POST /api/pasta/abrir`. O navegador não manda caminho: abre sempre a pasta que o `ui` recebeu. No Windows chama o `explorer.exe` direto, sem `cmd`, porque o caminho de uma pasta pode ter `&`.
 
+
+## 2026-10-07: o app faz o que a CLI faz, e a conversa fora de sessão
+
+Pedido do autor: criar capítulo, abrir a IA sem sessão e discutir os rumos da história pelo app.
+
+### Criar capítulo
+- `createChapter` saiu de dentro do comando `capitulo` e serve à CLI e à rota `POST /api/capitulos`. O navegador manda só o título; o nome do arquivo é sempre o próximo `cap-NN`. Quebra de linha no título vira espaço, para não nascer um segundo cabeçalho.
+
+### Conversar com a IA (`#conversa`)
+- **Uma tela para duas coisas:** com o campo "O que você quer decidir?" preenchido, é a discussão de rumos; pelo "Abrir terminal", é a conversa livre, sem pedido. Duas telas separadas teriam o mesmo terminal, o mesmo snapshot e o mesmo diff.
+- **Na discussão entra tudo, sem seleção.** Quem decide o rumo de um personagem precisa do elenco inteiro. No terminal, o pedido (`.lore-pack/discussao.md`) lista todas as fichas e referências e manda ler: a IA está na pasta, então copiar o texto delas para o pedido só gastaria tokens em dobro. No "Copiar pedido completo", para uma IA que não vê a pasta, vai o texto de tudo, com a estimativa de tokens.
+- **A discussão não é salva** (decisão do autor). Não vira sessão nem ganha pasta. O que fica é o que a IA mudar a pedido dele. `discussoes/<id>/` foi para o `docs/V2.md`.
+- **Rede de segurança igual à da correção do check:** snapshot com o nome `conversa` (não é id de sessão), diff na tela e "Desfazer tudo". Diferença: dá para ter mais de uma conversa aberta. Por isso o snapshot só é tirado quando nenhuma está rodando, e desfazer é recusado enquanto houver uma rodando.
+- **Sem prompt:** `fillArgs` com prompt vazio tira os argumentos que têm `{{prompt}}`, em vez de passar um argumento vazio para o programa. Limite conhecido: uma configuração como `["-p", "{{prompt}}"]` deixa o `-p` sozinho na conversa livre.
+- **O assunto vem do navegador** e vira texto do pedido, como o plano de uma sessão. Comando e argumentos continuam vindo só do `lore-pack.config.json`.
+- O prompt `08-discutir-rumos` entrou em `templates/prompts-de-sessao/`, para quem cola à mão.

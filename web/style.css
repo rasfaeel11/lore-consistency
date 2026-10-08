@@ -305,7 +305,8 @@ button.perigo {
 /* --- Sessão: informações de um lado, terminal do outro --- */
 
 #sessao:not([hidden]),
-#problemas:not([hidden]) {
+#problemas:not([hidden]),
+#conversa:not([hidden]) {
   display: grid;
   grid-template-columns: minmax(300px, 1fr) minmax(420px, 1.5fr);
   gap: 24px;
@@ -387,7 +388,8 @@ button.perigo {
 
 @media (max-width: 1100px) {
   #sessao:not([hidden]),
-  #problemas:not([hidden]) {
+  #problemas:not([hidden]),
+  #conversa:not([hidden]) {
     grid-template-columns: 1fr;
   }
 

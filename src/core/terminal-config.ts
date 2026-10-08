@@ -59,6 +59,8 @@ export function parseTerminalConfig(text: string | undefined): ParsedConfig {
 
 // Troca {{prompt}} em cada argumento. Cada item continua sendo um argumento só:
 // nada é juntado numa linha de comando de shell.
+// Sem prompt (conversa livre), os argumentos que só existem para levar o prompt saem.
 export function fillArgs(args: string[], prompt: string): string[] {
+  if (prompt === "") return args.filter((arg) => !arg.includes(PROMPT_MARKER));
   return args.map((arg) => arg.split(PROMPT_MARKER).join(prompt));
 }

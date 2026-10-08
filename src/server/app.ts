@@ -8,8 +8,10 @@ import { WebSocketServer } from "ws";
 import { basename, join } from "node:path";
 import { buildFixPrompt, extractChanges } from "../core/changes.js";
 import { listChapters } from "../core/chapters.js";
+import { DISCUSSION_FILE, DISCUSSION_START_PROMPT, TALK_ID, buildDiscussionPack, buildDiscussionRequest, discussionFiles } from "../core/discussion.js";
 import { FIX_FILE, FIX_ID, FIX_START_PROMPT, buildFixRequest } from "../core/fix.js";
 import { buildStartPrompt, isSessionId, listSessions, readSession } from "../core/session.js";
+import { estimateTokens } from "../core/tokens.js";
 import { readReferencias, validateStory } from "../core/validate.js";
 import { applyClosing, readClosing } from "../cli/apply.js";
 import { createChapter } from "../cli/capitulo.js";
@@ -194,6 +196,20 @@ async function handle(app: App, server: Server, req: IncomingMessage, res: Serve
     return path.endsWith("/reverter") ? postFixRevert(root, res) : postFixTerminal(app, res);
   }
 
+  // Conversa fora de sessão: livre, ou para discutir os rumos. O navegador manda só o assunto,
+  // que vira texto do pedido (como o plano de uma sessão), nunca comando nem argumento.
+  if (method === "GET" && path === "/api/conversa") return sendJson(res, 200, talkView(root));
+  if (method === "POST" && path === "/api/conversa/pedido") return postTalkPack(root, req, res);
+  if (method === "POST" && path === "/api/conversa/terminais") return postTalkTerminal(app, req, res);
+  if (method === "POST" && path === "/api/conversa/reverter") {
+    if (!isJson(req)) return sendJson(res, 415, { erro: "Mande os dados como JSON." });
+    // Com a IA ainda escrevendo, o que fosse desfeito poderia ser gravado de novo logo depois.
+    if (talkRunning(app)) {
+      return sendJson(res, 409, { erro: "Há uma conversa rodando. Feche o terminal dela antes de desfazer." });
+    }
+    return postTalkRevert(root, res);
+  }
+
   // Terminal embutido. O navegador só diz QUAL sessão: o corpo do pedido é ignorado, e
   // comando, argumentos, pasta e ambiente vêm do lore-pack.config.json e do servidor.
   if (method === "GET" && path === "/api/terminal") return sendJson(res, 200, await app.terminals.status());
@@ -327,6 +343,67 @@ function postFixRevert(root: string, res: ServerResponse): void {
   if (!hasSnapshot(root, FIX_ID)) return sendJson(res, 409, { erro: "Nenhuma correção foi pedida ainda: não há o que desfazer." });
   const changes = revertChanges(root, FIX_ID);
   sendJson(res, 200, { arquivos: changes.map((change) => ({ arquivo: change.path, tipo: change.kind })), ...problemsView(root) });
+}
+
+// --- Conversa com a IA fora de sessão ---
+
+function talkRunning(app: App): boolean {
+  return app.terminals.list().some((t) => t.sessao === TALK_ID && t.rodando);
+}
+
+function talkView(root: string) {
+  const { fichas, referencias } = discussionFiles(readStoryFiles(root));
+  // O que mudou desde que a conversa mais antiga ainda aberta começou (sem nenhuma, nada a mostrar).
+  const guard = checkGuard(root, TALK_ID);
+  return {
+    fichas: fichas.length,
+    referencias: referencias.length,
+    desde: guard?.since ?? null,
+    mudancas: (guard?.changes ?? []).map((change) => ({ arquivo: change.path, tipo: change.kind, diff: change.diff })),
+  };
+}
+
+function readTopic(body: Record<string, unknown>): string {
+  return typeof body.assunto === "string" ? body.assunto.replace(/\r\n/g, "\n").trim() : "";
+}
+
+// Para colar em outra IA (princípio 9): o pedido com o texto de tudo. Não grava nada.
+async function postTalkPack(root: string, req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const body = await readJson(req, res);
+  if (!body) return;
+  const topic = readTopic(body);
+  if (topic === "") return sendJson(res, 400, { erro: "Escreva o que você quer decidir antes de copiar o pedido." });
+
+  const modelPath = join(root, "modelos", "ficha-modelo.md");
+  const text = buildDiscussionPack(topic, readStoryFiles(root), isFile(modelPath) ? readText(modelPath) : undefined);
+  sendJson(res, 200, { texto: text, tokens: estimateTokens(text) });
+}
+
+// Com assunto, grava o pedido da discussão e abre a IA mandando ler. Sem assunto, abre a IA sem prompt.
+async function postTalkTerminal(app: App, req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const body = await readJson(req, res);
+  if (!body) return;
+  const topic = readTopic(body);
+  // Confere antes de gravar qualquer coisa: com o terminal desligado, nada muda na pasta.
+  const status = await app.terminals.status();
+  if (!status.ligado) return sendJson(res, 409, { erro: status.motivo });
+
+  // Snapshot novo só na primeira conversa: com outra ainda rodando, ele esconderia o que ela já mudou.
+  if (!talkRunning(app)) takeSnapshot(app.root, TALK_ID);
+  if (topic !== "") {
+    ensureLorePackDir(app.root);
+    writeFileSync(join(app.root, DISCUSSION_FILE), buildDiscussionRequest(topic, readStoryFiles(app.root)));
+  }
+
+  const opened = await app.terminals.open(TALK_ID, topic === "" ? "" : DISCUSSION_START_PROMPT);
+  return opened.ok ? sendJson(res, 201, { id: opened.id }) : sendJson(res, opened.status, { erro: opened.error });
+}
+
+// O segundo clique em "Desfazer" na página é a confirmação do princípio 4.
+function postTalkRevert(root: string, res: ServerResponse): void {
+  if (!hasSnapshot(root, TALK_ID)) return sendJson(res, 409, { erro: "Nenhuma conversa foi aberta ainda: não há o que desfazer." });
+  const changes = revertChanges(root, TALK_ID);
+  sendJson(res, 200, { arquivos: changes.map((change) => ({ arquivo: change.path, tipo: change.kind })), ...talkView(root) });
 }
 
 function getSession(root: string, id: string, res: ServerResponse): void {

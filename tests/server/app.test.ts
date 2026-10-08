@@ -258,6 +258,46 @@ describe("servidor do app", () => {
     });
   });
 
+  describe("conversa com a IA fora de sessão", () => {
+    it("GET /api/conversa: quantas fichas e referências entram e nenhuma mudança ainda", async () => {
+      addReferencia();
+
+      const body = await (await fetch(`${base}/api/conversa`)).json();
+
+      expect(body).toEqual({ fichas: 1, referencias: 1, desde: null, mudancas: [] });
+    });
+
+    it("POST /api/conversa/pedido: o pacote da discussão, com todas as fichas e a estimativa de tokens", async () => {
+      addReferencia();
+
+      const response = await postJson("/api/conversa/pedido", { assunto: "O que acontece com a Ana?" });
+      const body = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(body.texto).toContain("O que acontece com a Ana?");
+      expect(body.texto).toContain("Uma cidade portuária movida a sal.");
+      expect(body.texto).toContain("id: ana-ferreira");
+      expect(body.texto).toContain("O Resto é o que sobra da alma.");
+      expect(body.tokens).toBeGreaterThan(0);
+      // Só monta o texto: nada é gravado na pasta.
+      expect(existsSync(join(story, ".lore-pack"))).toBe(false);
+    });
+
+    it("pedido sem assunto dá 400", async () => {
+      const response = await postJson("/api/conversa/pedido", { assunto: "  " });
+
+      expect(response.status).toBe(400);
+      expect((await response.json()).erro).toContain("decidir");
+    });
+
+    it("desfazer sem nenhuma conversa aberta dá 409", async () => {
+      const response = await postJson("/api/conversa/reverter", {});
+
+      expect(response.status).toBe(409);
+      expect((await response.json()).erro).toContain("não há o que desfazer");
+    });
+  });
+
   describe("GET /api/sessoes/:id", () => {
     it("devolve o cabeçalho, o corpo e o comando de início", async () => {
       const response = await fetch(`${base}/api/sessoes/${OPEN}`);

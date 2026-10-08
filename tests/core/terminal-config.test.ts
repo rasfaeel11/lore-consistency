@@ -69,4 +69,9 @@ describe("fillArgs", () => {
   it("o prompt entra como um argumento só, mesmo com espaços e aspas", () => {
     expect(fillArgs(["{{prompt}}"], 'a b "c"')).toEqual(['a b "c"']);
   });
+
+  it("sem prompt (conversa livre), os argumentos com {{prompt}} saem e os outros ficam", () => {
+    expect(fillArgs(["--verbose", "{{prompt}}"], "")).toEqual(["--verbose"]);
+    expect(fillArgs(["{{prompt}}"], "")).toEqual([]);
+  });
 });

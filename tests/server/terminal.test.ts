@@ -347,6 +347,99 @@ describe("terminal embutido", SLOW, () => {
     );
   });
 
+  describe("conversa fora de sessão (POST /api/conversa/terminais)", () => {
+    const talk = (body: unknown = {}) => api("/api/conversa/terminais", { method: "POST", body: JSON.stringify(body) });
+
+    it("com o terminal desligado, recusa e não grava nada na pasta", async () => {
+      config({ comando: "nenhum" });
+      await start();
+
+      const response = await talk({ assunto: "O que acontece com a Ana?" });
+
+      expect(response.status).toBe(409);
+      expect(existsSync(join(story, ".lore-pack"))).toBe(false);
+    });
+
+    it.skipIf(!ptyAvailable)(
+      "sem assunto, abre a IA sem prompt nenhum e sem gravar pedido",
+      async () => {
+        nodeScript("eco");
+        await start();
+
+        const response = await talk();
+        expect(response.status).toBe(201);
+        const client = connect((await response.json()).id);
+        await client.waitFor(() => client.messages.some((m) => m.tipo === "fim"), "o fim do processo");
+
+        expect(client.output()).toContain("PROMPT:undefined");
+        expect(client.output().replace(/\n/g, "")).toContain(`CWD:${shownCwd(story)}`);
+        expect(existsSync(join(story, ".lore-pack", "discussao.md"))).toBe(false);
+        expect((await (await api("/api/terminais")).json())[0].sessao).toBe("conversa");
+        client.ws.close();
+      },
+    );
+
+    it.skipIf(!ptyAvailable)(
+      "com assunto, grava o pedido com todas as fichas e abre a IA mandando ler",
+      async () => {
+        nodeScript("eco");
+        await start();
+
+        const response = await talk({ assunto: "O que acontece com a Ana?" });
+        const client = connect((await response.json()).id);
+        await client.waitFor(() => client.messages.some((m) => m.tipo === "fim"), "o fim do processo");
+
+        expect(client.output()).toContain("PROMPT:Leia o arquivo .lore-pack/discussao.md");
+        const request = readFileSync(join(story, ".lore-pack", "discussao.md"), "utf8");
+        expect(request).toContain("O que acontece com a Ana?");
+        expect(request).toContain("fichas/personagens/ana-ferreira.md");
+        client.ws.close();
+      },
+    );
+
+    it.skipIf(!ptyAvailable)(
+      "mostra o que a IA mudou e desfaz",
+      async () => {
+        nodeScript("mexe");
+        await start();
+        const before = readFileSync(join(story, "estado.md"), "utf8");
+
+        const response = await talk();
+        const client = connect((await response.json()).id);
+        await client.waitFor(() => client.messages.some((m) => m.tipo === "guarda"), "a guarda da conversa");
+
+        const view = await (await api("/api/conversa")).json();
+        expect(view.mudancas.map((m: { arquivo: string }) => m.arquivo)).toEqual(["estado.md"]);
+
+        const reverted = await api("/api/conversa/reverter", { method: "POST", body: "{}" });
+        expect(reverted.status).toBe(200);
+        expect((await reverted.json()).mudancas).toEqual([]);
+        expect(readFileSync(join(story, "estado.md"), "utf8")).toBe(before);
+        client.ws.close();
+      },
+    );
+
+    it.skipIf(!ptyAvailable)(
+      "com uma conversa rodando: abre outra sem tirar snapshot novo, e recusa desfazer",
+      async () => {
+        nodeScript("vivo");
+        await start();
+        await talk();
+        const manifest = join(story, ".lore-pack", "snapshots", "conversa", "manifest.json");
+        const first = readFileSync(manifest, "utf8");
+        writeFileSync(join(story, "estado.md"), "Mudou no meio da conversa.\n");
+
+        const again = await talk();
+        const revert = await api("/api/conversa/reverter", { method: "POST", body: "{}" });
+
+        expect(again.status).toBe(201);
+        // O snapshot é o da primeira conversa: a mudança do meio continua sendo acusada.
+        expect(readFileSync(manifest, "utf8")).toBe(first);
+        expect(revert.status).toBe(409);
+      },
+    );
+  });
+
   describe("WebSocket", () => {
     it("sem token, com token errado, Origin errada ou ausente e Host errado: recusa o upgrade", async () => {
       nodeScript("eco");

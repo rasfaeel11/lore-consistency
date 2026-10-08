@@ -94,7 +94,8 @@ export class TerminalManager {
     return ready.ok ? { ligado: true, comando: ready.command.path } : { ligado: false, motivo: ready.error };
   }
 
-  // sessionId é o dono do terminal: uma sessão de escrita ou a correção do check (FIX_ID).
+  // sessionId é o dono do terminal: uma sessão de escrita, a correção do check (FIX_ID) ou a
+  // conversa fora de sessão (TALK_ID). Prompt vazio abre o programa sem pedido nenhum.
   async open(sessionId: string, prompt: string = buildStartPrompt(sessionId)): Promise<OpenResult> {
     const ready = await this.prepare();
     if (!ready.ok) return { ok: false, status: ready.status, error: ready.error };

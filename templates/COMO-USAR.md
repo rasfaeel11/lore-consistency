@@ -31,6 +31,8 @@ Prefere janela a terminal? Rode `lore-pack ui` na pasta da história. O navegado
 
 Prompts de apoio, a qualquer momento: `05-nova-ficha`, `06-criar-nomes`, `07-compactar`.
 
+Antes de planejar um capítulo, para decidir os rumos da história conversando com a IA: `08-discutir-rumos`. No app, é a tela "Conversar com a IA", que já entrega todas as fichas.
+
 ## Regras pra economizar tokens
 
 - Só as fichas dos personagens e lugares que aparecem na cena. Nunca todas.

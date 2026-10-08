@@ -89,20 +89,24 @@ function desenharBarra() {
 // Dono dos terminais da correção do check, igual ao FIX_ID do servidor. Não é id de sessão.
 const CORRECAO = "correcao";
 
-// Rotas pelo "#" do endereço: #nova, #problemas, #sessao/<id> ou vazio.
-// O id é o dono dos terminais da tela: a sessão, ou a correção do check.
+// Dono dos terminais da conversa fora de sessão, igual ao TALK_ID do servidor.
+const CONVERSA = "conversa";
+
+// Rotas pelo "#" do endereço: #nova, #problemas, #conversa, #sessao/<id> ou vazio.
+// O id é o dono dos terminais da tela: a sessão, a correção do check ou a conversa.
 function rotaAtual() {
   const hash = decodeURIComponent(location.hash.slice(1));
   if (hash === "nova") return { tipo: "nova" };
   if (hash === "problemas") return { tipo: "problemas", id: CORRECAO };
+  if (hash === "conversa") return { tipo: "conversa", id: CONVERSA };
   if (hash.startsWith("sessao/")) return { tipo: "sessao", id: hash.slice("sessao/".length) };
   return { tipo: "inicio" };
 }
 
 function mostrar(secao) {
-  for (const id of ["inicio", "nova", "problemas", "sessao"]) $(id).hidden = id !== secao;
-  // O painel do terminal é um só: vai para a tela que está aberta (sessão ou problemas).
-  if (secao === "sessao" || secao === "problemas") $(secao).append($("painel-terminal"));
+  for (const id of ["inicio", "nova", "problemas", "conversa", "sessao"]) $(id).hidden = id !== secao;
+  // O painel do terminal é um só: vai para a tela que está aberta (sessão, problemas ou conversa).
+  if (secao === "sessao" || secao === "problemas" || secao === "conversa") $(secao).append($("painel-terminal"));
 }
 
 async function navegar() {
@@ -110,6 +114,7 @@ async function navegar() {
   desenharBarra();
   if (rota.tipo === "nova") return mostrarNova();
   if (rota.tipo === "problemas") return mostrarProblemas();
+  if (rota.tipo === "conversa") return mostrarConversa();
   if (rota.tipo === "sessao") return mostrarSessao(rota.id);
   mostrar("inicio");
 }
@@ -264,6 +269,108 @@ $("problemas-confirmar").addEventListener("click", async () => {
     $("problemas-status").textContent = `Desfeito: ${dados.arquivos.map((a) => a.arquivo).join(", ")}.`;
   } catch (erro) {
     $("problemas-status").textContent = erro.message;
+  }
+});
+
+// --- Conversa com a IA fora de sessão: discutir os rumos, ou conversa livre ---
+
+async function mostrarConversa() {
+  $("conversa-status").textContent = "";
+  mostrar("conversa");
+  await carregarConversa();
+  await mostrarTerminais(CONVERSA);
+}
+
+async function carregarConversa() {
+  try {
+    desenharConversa(await api("/api/conversa"));
+  } catch (erro) {
+    $("conversa-status").textContent = erro.message;
+  }
+}
+
+function desenharConversa(dados) {
+  const fichas = dados.fichas === 1 ? "A ficha" : `As ${dados.fichas} fichas`;
+  const referencias = dados.referencias === 1 ? "a referência" : `as ${dados.referencias} referências`;
+  $("conversa-contexto").textContent =
+    dados.fichas + dados.referencias === 0
+      ? "A história ainda não tem fichas: a IA lê a bíblia e o estado."
+      : `${fichas} e ${referencias} da história entram sozinhas, junto com a bíblia e o estado. Não precisa marcar nada.`;
+
+  const lista = $("conversa-lista");
+  lista.replaceChildren();
+  confirmarDesfazerConversa(false);
+  // Sem mudança não há o que desfazer; o "Verificar alterações" fica sempre à mão.
+  $("conversa-reverter").hidden = dados.mudancas.length === 0;
+  if (dados.desde === null) {
+    $("conversa-titulo").textContent = "Nenhuma conversa foi aberta ainda. Ao abrir, o lore-pack guarda uma cópia dos arquivos para mostrar aqui o que mudar.";
+    return;
+  }
+  const desde = new Date(dados.desde).toLocaleString("pt-BR");
+  if (dados.mudancas.length === 0) {
+    $("conversa-titulo").textContent = `Nenhum arquivo da história mudou desde que a conversa começou (${desde}).`;
+    return;
+  }
+  const quantos = dados.mudancas.length === 1 ? "1 arquivo mudou" : `${dados.mudancas.length} arquivos mudaram`;
+  $("conversa-titulo").textContent = `${quantos} desde que a conversa começou (${desde}). Se foi o que você pediu, não precisa fazer nada.`;
+  $("conversa-confirmar").textContent = `Confirmar: voltar ${dados.mudancas.length === 1 ? "o arquivo" : `os ${dados.mudancas.length} arquivos`} ao que era antes da conversa`;
+  for (const mudanca of dados.mudancas) {
+    const titulo = document.createElement("h4");
+    titulo.textContent = `${mudanca.tipo}: ${mudanca.arquivo}`;
+    lista.append(titulo, desenharDiff(mudanca.diff));
+  }
+}
+
+function confirmarDesfazerConversa(sim) {
+  $("conversa-reverter").hidden = sim;
+  $("conversa-reler").hidden = sim;
+  $("conversa-confirmar").hidden = !sim;
+  $("conversa-cancelar").hidden = !sim;
+}
+
+function assuntoDaConversa() {
+  const assunto = $("conversa-assunto").value.trim();
+  if (assunto === "") $("conversa-status").textContent = "Escreva antes o que você quer decidir.";
+  return assunto;
+}
+
+$("botao-conversa").addEventListener("click", () => (location.hash = "#conversa"));
+$("discutir").addEventListener("click", () => {
+  $("conversa-status").textContent = "";
+  const assunto = assuntoDaConversa();
+  if (assunto !== "") abrirTerminal({ assunto });
+});
+$("copiar-discussao").addEventListener("click", async () => {
+  $("conversa-status").textContent = "";
+  const assunto = assuntoDaConversa();
+  if (assunto === "") return;
+  try {
+    const pedido = await api("/api/conversa/pedido", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ assunto }),
+    });
+    await copiar(pedido.texto, `Pedido copiado (~${pedido.tokens.toLocaleString("pt-BR")} tokens). Cole na conversa com a IA.`, "conversa-status");
+  } catch (erro) {
+    $("conversa-status").textContent = erro.message;
+  }
+});
+$("conversa-reler").addEventListener("click", carregarConversa);
+$("conversa-reverter").addEventListener("click", () => confirmarDesfazerConversa(true));
+$("conversa-cancelar").addEventListener("click", () => confirmarDesfazerConversa(false));
+$("conversa-confirmar").addEventListener("click", async () => {
+  try {
+    const dados = await api("/api/conversa/reverter", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    desenharConversa(dados);
+    await carregarHistoria();
+    $("conversa-status").textContent = `Desfeito: ${dados.arquivos.map((a) => a.arquivo).join(", ")}.`;
+  } catch (erro) {
+    confirmarDesfazerConversa(false);
+    $("conversa-status").textContent = erro.message;
   }
 });
 
@@ -759,11 +866,13 @@ function conectar(t) {
       desenharAbas(rotaAtual().id);
       // A correção terminou: roda o check de novo e mostra o que ela mudou.
       if (t.sessao === CORRECAO) carregarHistoria().then(() => rotaAtual().tipo === "problemas" && carregarProblemas());
+      // A conversa terminou: mostra o que ela mudou (o check da barra também pode ter mudado).
+      else if (t.sessao === CONVERSA) carregarHistoria().then(() => rotaAtual().tipo === "conversa" && carregarConversa());
       // A IA pode ter acabado de escrever o fechamento.md.
       else if (rotaAtual().id === t.sessao) carregarFechamento();
     }
     // A guarda comparou quando o programa terminou: se algo mudou, mostra o aviso da sessão.
-    if (mensagem.tipo === "guarda" && mensagem.mudancas.length > 0 && t.sessao !== CORRECAO && rotaAtual().id === t.sessao) verificarGuarda();
+    if (mensagem.tipo === "guarda" && mensagem.mudancas.length > 0 && t.sessao !== CORRECAO && t.sessao !== CONVERSA && rotaAtual().id === t.sessao) verificarGuarda();
   });
   ws.addEventListener("close", () => {
     if (t.rodando && terminais.has(t.id)) {
@@ -870,19 +979,22 @@ async function fecharTerminal(t) {
 }
 
 // Na tela de problemas, o terminal novo é uma correção: o servidor monta o pedido e abre a IA com ele.
-async function abrirTerminal() {
+// Na de conversa, o corpo pode levar o assunto da discussão; vazio, a IA abre sem pedido.
+const CAMINHO_TERMINAL = { problemas: "/api/problemas/terminais", conversa: "/api/conversa/terminais" };
+
+async function abrirTerminal(corpo = {}) {
   const rota = rotaAtual();
   const sessaoId = rota.id;
-  const caminho = rota.tipo === "problemas" ? "/api/problemas/terminais" : `/api/sessoes/${encodeURIComponent(sessaoId)}/terminais`;
+  const caminho = CAMINHO_TERMINAL[rota.tipo] ?? `/api/sessoes/${encodeURIComponent(sessaoId)}/terminais`;
   const botao = $("abrir-terminal");
   botao.disabled = true;
   avisoTerminal(null);
   try {
-    // Só o id da sessão: qual programa roda é decidido pelo lore-pack.config.json, no servidor.
+    // Qual programa roda é decidido pelo lore-pack.config.json, no servidor, nunca por este pedido.
     const { id } = await api(caminho, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: "{}",
+      body: JSON.stringify(corpo),
     });
     const t = await criarTerminal(id, sessaoId);
     terminalAtivo = id;
@@ -895,7 +1007,7 @@ async function abrirTerminal() {
   }
 }
 
-$("abrir-terminal").addEventListener("click", abrirTerminal);
+$("abrir-terminal").addEventListener("click", () => abrirTerminal());
 
 window.addEventListener("hashchange", navegar);
 

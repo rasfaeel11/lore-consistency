@@ -16,7 +16,6 @@ Os prompts que foram colados no Claude Code para construir o lore-pack, um marco
 | `M5-CORRECAO-E-APPLY.md` | Correção do CLAUDE.md e execução do M5 |
 | `M6.md` | Publicação |
 | `EXTRAS-TERMINAIS.md` | Prompts avulsos: executor, planejador, correção do `ui` |
-| `08-discutir-rumos.md` | Prompt de sessão de escrita que ainda não entrou nos modelos do `init` |
 
 Os prompts de sessão de escrita que o `init` copia para a pasta da história estão em `templates/prompts-de-sessao/`.
 
