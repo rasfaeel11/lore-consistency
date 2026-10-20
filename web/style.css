@@ -337,6 +337,11 @@ button.perigo {
   margin-top: 0;
 }
 
+/* O "display: block" dos selects vence o atributo hidden; sem isto, a lista aparecia sempre. */
+#escolha-terminal[hidden] {
+  display: none;
+}
+
 #abas-terminal {
   display: flex;
   flex-wrap: wrap;
